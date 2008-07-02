@@ -1,6 +1,11 @@
-.PHONY : all
+.PHONY : all clean
 
-all : find-grid empty-image png-size crop-images
+BINARIES = find-grid empty-image png-size crop-images
+
+all : $(BINARIES)
+
+clean :
+	rm -vf $(BINARIES)
 
 CPPFLAGS=-Wall -g -O3
 LDFLAGS=-lpng12
