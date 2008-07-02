@@ -84,10 +84,29 @@ puts "Globbing directory..."
 png_files = Dir['U*-*.png']
 # png_files = [ "U0000-002.png", "UFB50-004.png" ]
 
+some_done_done_from = Hash.new
+already_output_files = Dir['individual-characters/U*-*-*.png']
+already_output_files.each do |already_done|
+  if already_done =~ /(U[0-9A-F]+-[0-9A-F]+)/
+    some_done_done_from[$1+".png"] = true
+  end
+end
+pngs_with_no_grid = Dir['individual-characters/U*-*.png.empty']
+pngs_with_no_grid.each do |already_done|
+  if already_done =~ /(U[0-9A-F]+-[0-9A-F]+)/
+    some_done_done_from[$1+".png"] = true
+  end
+end
+
 png_files.each do |png_file|
   
   next if png_file =~ /U.*-001.png/
-  
+
+  if some_done_done_from[png_file]
+    puts "Looks as if we've already split #{png_file}"
+    next
+  end
+
   puts "Splitting characters out of each PNG file... "
   puts " Considering: "+png_file
   
@@ -161,10 +180,13 @@ png_files.each do |png_file|
   if ((cells_width == 0) && (cells_height != 0)) || ((cells_width != 0) && (cells_height == 0))
     STDERR.puts "Broken: divided #{png_file} into #{cells_width} by #{cells_height}"
   end
-  
-  next if ((cells_width == 0) || (cells_height == 0))
 
-  puts "Cropping from #{png_file}"
+  if ((cells_width == 0) || (cells_height == 0))
+    system "touch individual-characters/#{png_file}.empty"
+    next
+  end
+
+  puts "  Cropping from #{png_file}"
 
   p = IO.popen( "#{helpers}/crop-images #{png_file}", "w" )
   
