@@ -202,3 +202,13 @@ png_files.each do |png_file|
   end
 
 end
+
+unless system "cd individual-characters && ./link-non-blanks"
+  puts "The link-non-blanks script failed"
+  exit(-1)
+end
+
+unless system "cd individual-characters/non-blank && ./extract-numbers"
+  puts "The extract-numbers script failed"
+  exit(-1)
+end
