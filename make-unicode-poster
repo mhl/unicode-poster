@@ -49,9 +49,9 @@ pdfs_to_skip['UF0000.pdf'] = "Supplementary Private Use Area-A"
 pdfs_to_skip['U100000.pdf'] = "Supplementary Private Use Area-B"
 
 pdf_names.each do |p|
-  
+
   png_name = p.gsub( /.pdf$/, '-%03d.png' )
-  
+
   second_png_name = p.gsub( /\.pdf/, '-002.png' )
 
   if FileTest.exist?( second_png_name )
@@ -71,12 +71,12 @@ pdf_names.each do |p|
                    "-dGraphicsAlphaBits=4",
                    "-dTextAlphaBits=4",
                    p )
-      
+
       puts "Failed to convert #{p} to a series of PNG files"
       exit(-1)
     end
   end
-  
+
 end
 
 puts "Globbing directory..."
@@ -99,7 +99,7 @@ pngs_with_no_grid.each do |already_done|
 end
 
 png_files.each do |png_file|
-  
+
   next if png_file =~ /U.*-001.png/
 
   if some_done_done_from[png_file]
@@ -109,12 +109,12 @@ png_files.each do |png_file|
 
   puts "Splitting characters out of each PNG file... "
   puts " Considering: "+png_file
-  
+
   png_output_template = "individual-characters/" + png_file.gsub(/\.png/,"-%08d.png")
-  
+
   last_in_each_cell_y = nil
   first_in_each_cell_y = nil
-  
+
   last_in_each_cell_x = nil
   first_in_each_cell_x = nil
 
@@ -122,7 +122,7 @@ png_files.each do |png_file|
   # the PDF files shouldn't be in there.
 
   if png_file =~ /UFEFF-.*\.png/
-    
+
     next # The PDF shouldn't be in that directory...
 
   elsif png_file =~ /U2580-002\.png/
@@ -142,20 +142,20 @@ png_files.each do |png_file|
     first_in_each_cell_y = [ 4769,   5209,   5649,   6089,   6529 ]
 
   elsif png_file =~ /UFB50-004\.png/
-    
+
     last_in_each_cell_x  = [ 1387,   1739,   2090,   2442,   2794,   3146,   3497,   3849,   4200,   4552,   4904,   5952 ]
     last_in_each_cell_y  = [ 1244,   1684,   2124,   2564,   3004,   3444,   3884,   4324,   4764,   5204,   5644,   6084,   6524,   6964,   7404,   7837 ]
     first_in_each_cell_x = [ 1041,   1392,   1744,   2095,   2447,   2799,   3151,   3502,   3854,   4205,   4557,   5612 ]
     first_in_each_cell_y = [ 816,    1249,   1689,   2129,   2569,   3009,   3449,   3889,   4329,   4769,   5209,   5649,   6089,   6529,   6969,   7409 ]
 
   else
-    
+
     grid_results_lines = `#{helpers}/find-grid #{png_file} 333 427`.split("\n")
     unless $?.success?
       puts "#{helpers}/find-grid #{png_file} 333 427 failed"
       exit(-1)
     end
-    
+
     grid_results_lines.each do |line|
       line.chomp!
       values = line.gsub(/^(.*): *()/,'\2').split(/ +/)
@@ -171,9 +171,9 @@ png_files.each do |png_file|
         first_in_each_cell_y = values
       end
     end
-    
+
   end
-  
+
   cells_width = last_in_each_cell_x.length
   cells_height = last_in_each_cell_y.length
 
@@ -189,9 +189,9 @@ png_files.each do |png_file|
   puts "  Cropping from #{png_file}"
 
   p = IO.popen( "#{helpers}/crop-images #{png_file}", "w" )
-  
+
   c_number = 0
-  
+
   0.upto( cells_width - 1 ) do |cell_x|
     0.upto( cells_height - 1 ) do |cell_y|
 
@@ -199,20 +199,20 @@ png_files.each do |png_file|
       left_x = Integer(first_in_each_cell_x[cell_x])
       top_y = Integer(first_in_each_cell_y[cell_y])
       bottom_y = Integer(last_in_each_cell_y[cell_y])
-        
+
       output_filename = sprintf( png_output_template, c_number )
-      
+
       unless FileTest.exist?( output_filename )
 
-        puts "  Cropping to: #{output_filename}"
+        puts "    Cropping to: #{output_filename}"
 
         p.puts( "#{output_filename} #{left_x} #{top_y} #{(right_x - left_x) + 1} #{(bottom_y - top_y) + 1}" )
         p.flush
 
       end
-      
+
       c_number += 1
-      
+
     end
   end
 
