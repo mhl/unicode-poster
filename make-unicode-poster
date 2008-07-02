@@ -53,9 +53,11 @@ pdf_names.each do |p|
   png_name = p.gsub( /.pdf$/, '-%03d.png' )
   
   second_png_name = p.gsub( /\.pdf/, '-002.png' )
-  
-  if FileTest.exist?( second_png_name ) || pdfs_to_skip[p]
+
+  if FileTest.exist?( second_png_name )
     puts "#{p} has probably already been converted"
+  elsif pdfs_to_skip[p]
+    puts "We're supposed to skip #{p}"
   else
     puts "Converting #{p} to #{png_name}"
     unless system( "gs",
