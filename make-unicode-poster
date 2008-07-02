@@ -2,6 +2,14 @@
 
 charts_index_page = "http://www.unicode.org/charts/PDF/"
 
+# The directory with the helper files:
+helpers = "png-find-grid-revised"
+
+unless system("cd #{helpers} && make")
+  puts "Failed to build the helper programs.  Is libpng12-dev installed?"
+  exit(-1)
+end
+
 index_html = `curl -s #{charts_index_page}`
 unless $?.success?
   puts "Couldn't fetch the charts index page from: #{charts_index_page}"
@@ -121,9 +129,9 @@ png_files.each do |png_file|
 
   else
     
-    grid_results_lines = `png-find-grid-revised/find-grid #{png_file} 333 427`.split("\n")
+    grid_results_lines = `#{helpers}/find-grid #{png_file} 333 427`.split("\n")
     unless $?.success?
-      puts "png-find-grid-revised/find-grid #{png_file} 333 427 failed"
+      puts "#{helpers}/find-grid #{png_file} 333 427 failed"
       exit(-1)
     end
     
@@ -156,7 +164,7 @@ png_files.each do |png_file|
 
   puts "Cropping from #{png_file}"
 
-  p = IO.popen( "png-find-grid-revised/crop-images #{png_file}", "w" )
+  p = IO.popen( "#{helpers}/crop-images #{png_file}", "w" )
   
   c_number = 0
   
