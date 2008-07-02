@@ -1,0 +1,9 @@
+#!/bin/sh
+
+set -e
+
+gcc -Wall -g -O3 -o find-grid readpng.c find-grid.c -lpng12
+gcc -Wall -g -O3 -o empty-image readpng.c empty-image.c -lpng12
+gcc -Wall -g -O3 -o png-size readpng.c png-size.c -lpng12
+gcc -Wall -g -O3 -o crop-images readpng.c crop-images.c -lpng12
+
