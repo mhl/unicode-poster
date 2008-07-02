@@ -172,9 +172,7 @@ png_files.each do |png_file|
   
   0.upto( cells_width - 1 ) do |cell_x|
     0.upto( cells_height - 1 ) do |cell_y|
-      
-      GC.start
-      
+
       right_x = Integer(last_in_each_cell_x[cell_x])
       left_x = Integer(first_in_each_cell_x[cell_x])
       top_y = Integer(first_in_each_cell_y[cell_y])
