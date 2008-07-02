@@ -1,0 +1,196 @@
+#!/usr/bin/ruby -w
+
+charts_index_page = "http://www.unicode.org/charts/PDF/"
+
+index_html = `curl -s #{charts_index_page}`
+unless $?.success?
+  puts "Couldn't fetch the charts index page from: #{charts_index_page}"
+  exit(-1)
+end
+
+pdf_names = Array.new
+
+pdf_re = Regexp.new( '(U([0-9A-F]+)\.pdf)' )
+
+index_html.scan( pdf_re ) { |m| pdf_names.push( m[0] ) }
+
+pdf_names.sort!.uniq!
+
+pdf_names.sort! { |a,b|
+	a =~ pdf_re; a_hex_string = $2
+  b =~ pdf_re; b_hex_string = $2
+	a_hex_string.hex <=> b_hex_string.hex
+}
+
+pdf_names.each do |p|
+  puts "Downloading: #{p}"
+  unless FileTest.exist?( p )
+    unless system( "curl", "-q", charts_index_page + p, "-o", p )
+      puts "Failed to download: #{p}"
+      exit( -1 )
+    end
+  end
+end
+
+pdfs_to_skip = Hash.new
+
+pdfs_to_skip['UD800.pdf'] = "High Surrogate Area"
+pdfs_to_skip['UDC00.pdf'] = "Low Surrogate Area"
+pdfs_to_skip['UE000.pdf'] = "Private Use Area"
+pdfs_to_skip['UF0000.pdf'] = "Supplementary Private Use Area-A"
+pdfs_to_skip['U100000.pdf'] = "Supplementary Private Use Area-B"
+
+pdf_names.each do |p|
+  
+  png_name = p.gsub( /.pdf$/, '-%03d.png' )
+  
+  second_png_name = p.gsub( /\.pdf/, '-002.png' )
+  
+  if FileTest.exist?( second_png_name ) || pdfs_to_skip[p]
+    puts "#{p} has probably already been converted"
+  else
+    puts "Converting #{p} to #{png_name}"
+    unless system( "gs",
+                   "-sOutputFile=#{png_name}",
+                   "-dNOPAUSE",
+                   "-dSAFER",
+                   "-dBATCH",
+                   "-q",
+                   "-sDEVICE=pnggray",
+                   "-r800",
+                   "-dGraphicsAlphaBits=4",
+                   "-dTextAlphaBits=4",
+                   p )
+      
+      puts "Failed to convert #{p} to a series of PNG files"
+      exit(-1)
+    end
+  end
+  
+end
+
+puts "Globbing directory..."
+
+png_files = Dir['U*-*.png']
+# png_files = [ "U0000-002.png", "UFB50-004.png" ]
+
+png_files.each do |png_file|
+  
+  next if png_file =~ /U.*-001.png/
+  
+  puts "Splitting characters out of each PNG file... "
+  puts " Considering: "+png_file
+  
+  png_output_template = "individual-characters/" + png_file.gsub(/\.png/,"-%08d.png")
+  
+  last_in_each_cell_y = nil
+  first_in_each_cell_y = nil
+  
+  last_in_each_cell_x = nil
+  first_in_each_cell_x = nil
+
+  # The find-grid program gets certain code pages wrong, and one of
+  # the PDF files shouldn't be in there.
+
+  if png_file =~ /UFEFF-.*\.png/
+    
+    next # The PDF shouldn't be in that directory...
+
+  elsif png_file =~ /U2580-002\.png/
+
+    # Fix this one...
+
+    last_in_each_cell_x  = [ 2247, 2592 ]
+    last_in_each_cell_y  = [ 1244, 1684,   2124,   2564,   3004,   3444,   3884,   4324, 4764,   5204,   5644,   6084,   6524,   6964,   7404,   7837 ]
+    first_in_each_cell_x = [ 1908, 2252 ]
+    first_in_each_cell_y = [ 816,  1249,   1689,   2129,   2569,   3009,   3449,   3889, 4329,   4769,   5209,   5649,   6089,   6529,   6969,   7409 ]
+
+  elsif png_file =~ /UFFF0-002\.png/
+
+    last_in_each_cell_x = [ 2414 ]
+    last_in_each_cell_y = [ 5204,   5644,   6084,   6524,   6964 ]
+    first_in_each_cell_x = [ 2085 ]
+    first_in_each_cell_y = [ 4769,   5209,   5649,   6089,   6529 ]
+
+  elsif png_file =~ /UFB50-004\.png/
+    
+    last_in_each_cell_x  = [ 1387,   1739,   2090,   2442,   2794,   3146,   3497,   3849,   4200,   4552,   4904,   5952 ]
+    last_in_each_cell_y  = [ 1244,   1684,   2124,   2564,   3004,   3444,   3884,   4324,   4764,   5204,   5644,   6084,   6524,   6964,   7404,   7837 ]
+    first_in_each_cell_x = [ 1041,   1392,   1744,   2095,   2447,   2799,   3151,   3502,   3854,   4205,   4557,   5612 ]
+    first_in_each_cell_y = [ 816,    1249,   1689,   2129,   2569,   3009,   3449,   3889,   4329,   4769,   5209,   5649,   6089,   6529,   6969,   7409 ]
+
+  else
+    
+    grid_results_lines = `png-find-grid-revised/find-grid #{png_file} 333 427`.split("\n")
+    unless $?.success?
+      puts "png-find-grid-revised/find-grid #{png_file} 333 427 failed"
+      exit(-1)
+    end
+    
+    grid_results_lines.each do |line|
+      line.chomp!
+      values = line.gsub(/^(.*): *()/,'\2').split(/ +/)
+      name = line.gsub(/^ *(.*):.*$/,'\1')
+      case name
+      when 'last_in_each_cell_x'
+        last_in_each_cell_x = values
+      when 'last_in_each_cell_y'
+        last_in_each_cell_y = values
+      when 'first_in_each_cell_x'
+        first_in_each_cell_x = values
+      when 'first_in_each_cell_y'
+        first_in_each_cell_y = values
+      end
+    end
+    
+  end
+  
+  cells_width = last_in_each_cell_x.length
+  cells_height = last_in_each_cell_y.length
+
+  if ((cells_width == 0) && (cells_height != 0)) || ((cells_width != 0) && (cells_height == 0))
+    STDERR.puts "Broken: divided #{png_file} into #{cells_width} by #{cells_height}"
+  end
+  
+  next if ((cells_width == 0) || (cells_height == 0))
+
+  puts "Cropping from #{png_file}"
+
+  p = IO.popen( "png-find-grid-revised/crop-images #{png_file}", "w" )
+  
+  c_number = 0
+  
+  0.upto( cells_width - 1 ) do |cell_x|
+    0.upto( cells_height - 1 ) do |cell_y|
+      
+      GC.start
+      
+      right_x = Integer(last_in_each_cell_x[cell_x])
+      left_x = Integer(first_in_each_cell_x[cell_x])
+      top_y = Integer(first_in_each_cell_y[cell_y])
+      bottom_y = Integer(last_in_each_cell_y[cell_y])
+        
+      output_filename = sprintf( png_output_template, c_number )
+      
+      unless FileTest.exist?( output_filename )
+
+        puts "  Cropping to: #{output_filename}"
+
+        p.puts( "#{output_filename} #{left_x} #{top_y} #{(right_x - left_x) + 1} #{(bottom_y - top_y) + 1}" )
+        p.flush
+
+      end
+      
+      c_number += 1
+      
+    end
+  end
+
+  p.close
+
+  unless $?.success?
+    puts "crop-images failed"
+    exit(-1)
+  end
+
+end
