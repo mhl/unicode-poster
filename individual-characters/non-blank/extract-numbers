@@ -1,0 +1,126 @@
+#!/usr/bin/ruby -w
+
+unless FileTest.exists? 'Blocks.txt'
+  unless system( "curl", "-s", "ftp://ftp.unicode.org/Public/5.1.0/ucd/Blocks.txt", "-o", "Blocks.txt" )
+    STDERR.puts "Couldn't download Blocks.txt."
+    exit(-1)
+  end
+end
+
+require '../tileinfo.rb'
+
+files = Dir['U*-*-*.png']
+
+files.delete_if { |x| x =~ /top/ }
+files.delete_if { |x| x =~ /bottom/ }
+
+files.sort! { |a,b|
+  Integer( a.gsub( /^U([0-9A-F]+)\-([0-9A-F]+)\-([0-9A-F]+).png$/, '0x\1\2\3' ) ) <=>
+    Integer( b.gsub( /^U([0-9A-F]+)\-([0-9A-F]+)\-([0-9A-F]+).png$/, '0x\1\2\3' ) )
+}
+
+# ------------------------------------------------------------------------
+
+top_files = Dir['U*-*-*-top.png']
+
+open( "top-sizes.yaml", "w" ) do |o|
+
+  o.puts "---"
+
+  top_files.each do |f|
+    
+    block_name = name_of_page(f.gsub(/^(U[0-9A-F]+).*$/,'\1'))
+    
+    if block_name
+      
+      output = safe_backticks("../../png-find-grid-revised/empty-image",f)
+      if $?.success?
+        # Do nothing, the image was empty...
+        puts "#{f} was empty"
+      else
+        output.chomp!
+        if output =~ /^(\d+) (\d+)/
+          o.puts("#{f}: !ruby/object:TileInfo")
+          o.puts("  filename: #{f}")
+          o.puts("  h: #{$2}")
+          o.puts("  w: #{$1}")
+          o.puts("  block: #{block_name}")
+        end
+      end
+    end
+    
+  end
+  
+end
+
+# ------------------------------------------------------------------------
+
+open( "codepoints.yaml", "a" ) do |o|
+  
+  files.each do |fname|
+
+    next if fname =~ /top.png/
+    next if fname =~ /bottom.png/
+    
+    fname =~ /U([0-9A-F]+)-([0-9A-F]+)/
+
+    next unless Integer("0x"+$1+$2) > 0x4E00068
+
+    block = Integer("0x"+$1)
+
+    info = `../../png-find-grid-revised/png-size #{fname}`
+    unless $?.success?
+      puts "png-size #{fname} failed."
+      exit(-1)
+    end
+    
+    width = nil
+    height = nil
+    
+    info.chomp!
+    if info =~ /(\d+)x(\d+)/
+      
+      width = Integer($1)
+      height = Integer($2)
+      
+      top_part_fname = fname.sub( /.png/, '-top.png' )
+      bottom_part_fname = fname.sub( /.png/, '-bottom.png' )
+      
+      guessed_text_size = 75
+      
+      text_starts_at = height - guessed_text_size
+      
+      p = IO.popen( "../../png-find-grid-revised/crop-images #{fname}", "w" )
+
+      p.puts( "#{top_part_fname} 0 0 #{width} #{text_starts_at}" )
+      p.puts( "#{bottom_part_fname} 0 #{text_starts_at} #{width} #{guessed_text_size}" )
+
+      p.close
+      unless $?.success?
+        puts "../../png-find-grid-revised/crop-images #{fname} failed."
+        exit(-1)
+      end
+
+      result = `pngtopnm #{bottom_part_fname} | ocrad -`
+      unless $?.success?
+        puts "png-topnm #{bottom_part_fname} | ocrad - failed."
+        exit(-1)
+      end
+      
+      result.chomp!
+      result.gsub!( /\s/, '' )
+      result.gsub!( /[oO]/, '0' )
+      result.gsub!( /a/, '8' )
+      result.gsub!( /g/, '9' )
+      
+      result.upcase!
+      
+      o.puts "-"
+      o.puts '  - "' + fname + '"'
+      o.puts "  - " + "0x" + result
+      
+    end
+    
+  end
+  
+end
