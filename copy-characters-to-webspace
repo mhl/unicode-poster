@@ -1,0 +1,32 @@
+#!/usr/bin/ruby -w
+
+require 'yaml'
+
+if ARGV.length != 2
+  puts "Usage: CORRECTED-CODEPOINTS-FILE DESTINATION-DIRECTORY"
+  exit(-1)
+end
+
+codepoints_filename = ARGV[0]
+destination_directory = ARGV[1]
+
+data = open(codepoints_filename,"r") { |f| YAML.load(f.read) }
+
+data.each do |e|
+
+  name = e[0]
+  codepoint = e[1]
+  
+  new_name = sprintf("0x%06X.png",codepoint)
+
+  puts "Copying #{name} to #{new_name}"
+
+  unless system( "convert",
+                 "-scale",
+                 "50%",
+                 "individual-characters/non-blank/" + name.gsub(".png","-top.png"),
+                 destination_directory + "reduced-" + new_name )
+    puts "Failed to convert and copy: #{name}"
+    exit(-1)
+  end
+end

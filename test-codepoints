@@ -1,0 +1,47 @@
+#!/usr/bin/ruby -w
+
+# This script will find the codepoints which are out
+# of order - this indicates that there was an error
+# in the OCR and you should correct these errors by
+# hand.
+
+require 'yaml'
+
+filename = nil
+
+if ARGV.length == 0
+  filename = "individual-characters/non-blank/codepoints.yaml"
+elsif ARGV.length == 1
+  filename = ARGV[0]
+else
+  puts "Usage: ./test-codepoints [ FILENAME ]"
+  exit(-1)
+end
+
+a = open(filename,"r") { |f| YAML.load(f.read) }
+
+last_codepoint = 0
+
+a.each do |e|
+
+  name = e[0]
+  codepoint = e[1]
+
+  if codepoint.class == Fixnum
+
+    if codepoint < last_codepoint
+      puts "Problem with: #{name} => #{codepoint}"
+      puts "   Out of order..."
+    end
+
+    last_codepoint = codepoint
+
+  else
+   
+    puts "Problem with: #{name} => #{codepoint}"
+    puts "   Not a Fixnum"
+ 
+  end
+
+end
+

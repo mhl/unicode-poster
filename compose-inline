@@ -1,0 +1,578 @@
+#!/usr/bin/ruby -w
+
+require 'yaml'
+require 'GD'
+require '../tileinfo.rb'
+
+unless ARGV.length == 2
+  puts "Usage: <title> <number-of-pages>"
+  exit(-1)
+end
+
+$title = ARGV[0]
+$number_of_pages = Integer(ARGV[1])
+
+unless FileTest.exists?( 'Blocks.txt' )
+  unless system( "curl", "-s", "ftp://ftp.unicode.org/Public/5.0.0/ucd/Blocks.txt", "-o", "Blocks.txt" )
+    STDERR.puts "Couldn't download Blocks.txt."
+    exit(-1)
+  end
+end
+
+$pages_hash = Hash.new
+
+files = Dir['U*-*-*-top.png']
+
+files.each do |png_file|
+
+  $pages_hash[png_file.gsub(/\-\d{3}\-\d{8}-top\..*/,'')] = Array.new
+
+end
+
+$font_point_size = 160
+$font_filename = '/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf'
+
+def text_rectangle( text, point_size = $font_point_size )
+  
+  error, r = GD::Image.stringTTF( 0, $font_filename,
+                                  point_size, 0, 0, 0,
+                                  text )
+  
+  if( error )
+    raise "Couldn't find text dimensions for \"#{text}\": " + error
+  end
+  
+  text_width = [ r[4] - r[6], r[2] - r[0] ].max
+  text_height = [ r[1] - r[7], r[3] - r[5] ].max
+  
+  [ text_width, text_height, r ]
+  
+end
+
+def draw_text( im, text, x_left, y_midpoint, point_size = $font_point_size )
+  
+  text_width, text_height, r = text_rectangle( text, point_size )
+  
+  black = im.colorAllocate( 0, 0, 0 )
+  
+  draw_x = x_left - r[6]
+  draw_y = y_midpoint - (text_height / 2) - r[7]
+  
+  unless text.empty?
+    error, ignore = im.stringTTF( black, $font_filename,
+                                 point_size, 0,
+                                 draw_x,
+                                 draw_y,
+                                 text )
+    
+  end
+  
+end
+
+def compare_page_names( a, b )
+
+  re = Regexp.new('U(\w+)')
+
+  a_page = nil
+  b_page = nil
+
+  if( a =~ re )
+    a_page = Integer("0x"+$1)
+  end
+
+  if( b =~ re )
+    b_page = Integer("0x"+$1)
+  end
+
+  if( a_page && b_page )
+    if( 0 != (a_page <=> b_page) )
+      return (a_page <=> b_page)
+    end
+  end
+
+  return (a <=> b)
+
+end
+
+class Integer
+  def between_inclusive?( min, max )
+    (self >= min) && (self <= max)
+  end
+end
+
+class Block
+
+  attr_accessor :first, :last, :name, :skip, :first_i, :last_i
+
+  def initialize( first, last, name )
+    @first = first
+    @last = last
+    @name = name
+    @skip = false
+    @first_i = Integer("0x"+first)
+    @last_i = Integer("0x"+last)
+  end
+
+  def in_block?( code_point )
+    code_point.between_inclusive?(@first_i,@last_i)
+  end
+
+end
+
+$blocks = Array.new
+
+open("Blocks.txt","r") do |f|
+  f.each do |line|
+    line.chomp!
+    if line =~ /^([0-9A-F]+)\.\.([0-9A-F]+); (.*) *$/
+      b = Block.new($1,$2,$3)
+      $blocks.push b
+    end
+  end
+end
+
+# This returns nil if we should skip it...
+
+def name_of_page( file_basename )
+
+  code_point = Integer("0x"+file_basename.gsub(/^U/,''))
+
+  $blocks.each do |b|
+    if code_point <= 0xFFFF
+      range_part = sprintf( " (0x%04X to 0x%04X)", b.first_i, b.last_i )
+    else
+      range_part = sprintf( " (0x%06X to 0x%06X)", b.first_i, b.last_i )      
+    end
+    if b.in_block? code_point
+      return b.name + range_part
+    end
+  end
+
+  nil
+
+end
+
+$pages = $pages_hash.keys.sort { |a,b| compare_page_names(a,b) }
+
+$pages.each do |p|
+  puts "#{p} (#{name_of_page(p)})"
+end
+
+$info_hash = YAML.load( open( "top-sizes.yaml", "r" ){ |f| f.read } )
+
+$info_hash.each_key do |png_file|
+  # puts "key from $info_hash was: #{png_file}"
+  from_page = png_file.gsub(/\-\d{3}\-\d{8}-top\..*/,'')
+  $pages_hash[from_page].push(png_file)
+end
+
+# The layout will look like this:
+#
+#   ^
+#   |
+#   |  Title     [page_title_height]
+#   |
+#   v
+#   ^
+#   | Basic Latin (U000 to U007F)   [block_header_height]
+#   v
+#   ^  _   _
+#   | | | | |
+#   | |_| |_| ...
+#   v
+#   ^  _   _
+#   | | | | |
+#   | |_| |_|
+#   v
+#   ^
+#   |  Latin-1 Supplement (U080 to U007F)
+#   v
+#   ^  _   _
+#   | | | | |
+#   | |_| |_| ...
+#   v
+#
+#   ....
+#
+#   [ A footer image with a helpful URL ]
+
+# $block_header_height_in_pixels = 160
+# $title_height_in_pixels = 300
+# $max_tile_height = 163 - 27
+# $minimum_space_to_right_of_block = 100
+
+# The above values were for 300dpi; now we're at 800dpi, we need to
+# scale up a bit.
+
+$block_header_height_in_pixels = 426
+$title_height_in_pixels = 800
+$max_tile_height = ((163 - 27) * 8) / 3
+$minimum_space_to_right_of_block = 300
+
+$space_to_right_of_header = -150
+
+def whole_block_width( page_name )
+
+  page_files = $pages_hash[page_name]
+
+  row_width_so_far = 0
+  
+  page_files.each do |page_file|
+    row_width_so_far += $info_hash[page_file].w
+  end
+
+  header_width, header_height, r = text_rectangle( name_of_page(page_name) )
+
+  header_width + $space_to_right_of_header + row_width_so_far
+
+end
+
+def header_width( page_name )
+  width, height, r = text_rectangle( name_of_page(page_name) )
+  width
+end
+
+$pages.each do |p|
+
+  puts sprintf( "%10s: %10d (%70s)", p, whole_block_width(p), name_of_page(p) )
+
+end
+
+class HeaderToDraw
+
+  attr_accessor :x
+
+  def initialize( x, text )
+    @text = text
+    @x = x
+  end  
+
+  def draw_to( im, color, leave_header_space )
+    puts "Drawing '#{@text}' at x = #{@x}"
+    draw_text( im, @text, @x, ($block_header_height_in_pixels / 2) - 14, $font_point_size )
+  end
+
+end
+
+class ImageToDraw
+
+  attr_accessor :x
+
+  def initialize( x, image_file )
+    @x = x
+    @image_file = image_file
+  end
+  
+  def draw_to( im, color, leave_header_space )
+    im_tile = GD::Image.new_from_png( @image_file )
+    y = 0
+    im_tile.copy( im, x, y, 0, 0, im_tile.width, im_tile.height)
+    im_tile.destroy
+  end
+
+end
+
+def draw_these( everything_to_draw, image_index, filename_base, maximum_row_width, current_page, just_score )
+ 
+  unless just_score
+    print "Drawing page #{current_page} image #{image_index}..."
+  end
+    
+  includes_headers = everything_to_draw.detect { |e| e.class == HeaderToDraw }
+
+  height = $max_tile_height
+  if includes_headers
+    if $block_header_height_in_pixels > $max_tile_height
+      height = $block_header_height_in_pixels
+    end
+  end
+  
+  if just_score
+    return height
+  end
+
+  puts " which is #{maximum_row_width}x#{height}"
+
+  im = GD::Image.new( maximum_row_width, height )
+
+  white = im.colorAllocate( 255, 255, 255 )
+  black = im.colorAllocate( 0, 0, 0 )
+        
+  im.filledRectangle( 0, 0, maximum_row_width, height, white )
+
+  everything_to_draw.each do |e|
+    e.draw_to( im, black, includes_headers )
+  end
+  
+  open( filename_base + sprintf("-%02d-%08d.png",current_page,image_index), "w" ) do |f|
+    im.png f
+  end
+
+  im.destroy
+  im = nil
+
+  GC.start
+
+  return height
+
+end
+
+def draw_compacted( maximum_row_width, filename_base, just_score )
+
+  # If height_in_pixels_so_far goes over maximum_page_height, we start
+  # writing them to a new page.
+
+  maximum_page_height = maximum_row_width * Math.sqrt(2)
+  current_page = 0
+
+  height_in_pixels_so_far = 0
+  row_width_so_far = 0  
+
+  image_index = 0
+  
+  # ------------------------------------------------------------------------
+
+  unless just_score
+    im = GD::Image.new( maximum_row_width, $title_height_in_pixels )
+
+    white = im.colorAllocate( 255, 255, 255 )
+    black = im.colorAllocate( 0, 0, 0 )
+
+    im.filledRectangle( 0, 0, maximum_row_width, $title_height_in_pixels, white )
+    draw_text( im, $title, 100, $title_height_in_pixels / 2, 320 )
+  
+    open( filename_base + sprintf("-%02d-%08d.png",current_page,image_index), "w" ) do |f|
+      im.png f
+    end
+    im.destroy
+    im = nil
+    GC.start
+  end
+
+  image_index += 1
+  height_in_pixels_so_far += $title_height_in_pixels
+
+  # ------------------------------------------------------------------------
+
+  everything_to_draw = Array.new
+
+  overflowed = false
+  continue_this_line = true
+
+  number_of_blocks = $pages.length
+
+  header_goes_to = 0
+  
+  $pages.each_with_index do |p,i|
+
+    overflowed = false   
+
+    if continue_this_line
+      name = name_of_page(p)
+      h_width = header_width(p)
+      header_goes_to = row_width_so_far + h_width
+      everything_to_draw.push HeaderToDraw.new( row_width_so_far, name )
+      row_width_so_far += $minimum_space_to_right_of_block + h_width + $space_to_right_of_header
+    else
+      name = name_of_page(p)
+      row_width_so_far = 0
+      h_width = header_width(p)
+      header_goes_to = h_width
+      everything_to_draw.push HeaderToDraw.new( row_width_so_far, name )
+      row_width_so_far += h_width + $space_to_right_of_header
+    end
+
+    page_files = $pages_hash[p]
+
+    page_files.sort!
+    
+    page_files.each do |page_file|
+      
+      tile_width = $info_hash[page_file].w
+      
+      if (row_width_so_far + tile_width) > maximum_row_width
+        
+        row_width_so_far = 0
+        overflowed = true
+
+        # Draw all the pending stuff...
+
+        height_in_pixels_so_far += draw_these( everything_to_draw,
+                                                image_index,
+                                                filename_base,
+                                                maximum_row_width,
+                                                current_page,
+                                                just_score )
+
+        if (height_in_pixels_so_far > ((current_page + 1) * maximum_page_height)) && (current_page != ($number_of_pages - 1))
+          current_page += 1
+        end
+        everything_to_draw = Array.new
+        image_index += 1
+
+      else
+        
+        everything_to_draw.push ImageToDraw.new( row_width_so_far, page_file )
+        row_width_so_far += tile_width
+        
+      end
+      
+    end
+    
+    # Is there space for the next block too?
+    
+    if (i < (number_of_blocks - 1))
+
+      space_needed_for_next_block = whole_block_width( $pages[i+1] )
+
+      if (! overflowed) &&
+          ((row_width_so_far + $minimum_space_to_right_of_block + space_needed_for_next_block) < (maximum_row_width))
+        
+        continue_this_line = true
+        row_width_so_far += $minimum_space_to_right_of_block
+
+      else
+        
+        # Draw all the pending stuff...
+
+        height_in_pixels_so_far += draw_these( everything_to_draw,
+                                               image_index,
+                                               filename_base,
+                                               maximum_row_width,
+                                               current_page,
+                                               just_score )
+
+        if (height_in_pixels_so_far > ((current_page + 1) * maximum_page_height)) && (current_page != ($number_of_pages - 1))
+          current_page += 1
+        end
+        everything_to_draw = Array.new
+
+        image_index += 1       
+  
+        continue_this_line = false
+        
+      end
+
+    else
+
+      # Draw all the pending stuff...
+      
+      height_in_pixels_so_far += draw_these( everything_to_draw,
+                                             image_index,
+                                             filename_base,
+                                             maximum_row_width,
+                                             current_page,
+                                             just_score )
+
+      if (height_in_pixels_so_far > ((current_page + 1) * maximum_page_height)) && (current_page != ($number_of_pages - 1))
+        current_page += 1
+      end
+      everything_to_draw = Array.new
+    
+      image_index += 1
+      
+      continue_this_line = false
+
+    end
+
+  end
+
+  # Draw an empty one at the bottom...
+
+  unless just_score
+
+    im = GD::Image.new( maximum_row_width, $title_height_in_pixels )
+
+    white = im.colorAllocate( 255, 255, 255 )
+    
+    im.filledRectangle( 0, 0, maximum_row_width, $title_height_in_pixels, white )
+    
+    url_text = "http://mythic-beasts.com/~mark/random/unicode-poster/"
+    url_text_width, ignore_height, ignored_bounds = text_rectangle( url_text, 320 )
+    draw_text( im, url_text, maximum_row_width - (url_text_width + 200), $title_height_in_pixels / 2, 320 )
+    
+    open( filename_base + sprintf("-%02d-%08d.png",current_page,image_index), "w" ) do |f|
+      im.png f
+    end
+    
+    im.destroy
+    im = nil
+    
+    GC.start
+
+  end
+
+  height_in_pixels_so_far += $title_height_in_pixels
+
+  height_in_pixels_so_far
+
+end
+
+# Basically trying to solve:
+# 
+#    Math.sqrt(2) = x / draw_compacted(x) 
+# 
+# ... by binary search (draw_compacted is monotonic decreasing.)
+
+pixel_width_to_use = nil
+
+if true
+
+x_lower = 500
+x_higher = files.length * $max_tile_height
+
+y_lower = nil
+y_higher = nil
+
+loop do
+
+  unless y_lower
+    y_lower = draw_compacted( x_lower, "ignored", true )
+  end
+  unless y_higher
+    y_higher = draw_compacted( x_higher, "ignored", true )
+  end
+  
+  puts "---"
+  puts "  lower guess: #{x_lower} => #{y_lower} (#{y_lower/Float(x_lower)})"
+  puts "  higher guess: #{x_higher} => #{y_higher} (#{y_higher/Float(x_higher)})"
+
+  x_guess = Integer( (x_lower + x_higher) / 2 )
+  y_guess = draw_compacted( x_guess, "ignored", true )
+
+  puts "  middle guess: #{x_guess} => #{y_guess} (#{y_guess/Float(x_guess)})"
+
+  if (y_guess == y_lower) && (y_guess == y_higher)
+    puts "The guess was the same as one both previous ones; good enough."
+    pixel_width_to_use = x_guess
+    break
+  end
+
+  y_ideal = Math.sqrt(2) * x_guess * $number_of_pages
+
+  if y_guess > y_ideal
+    x_lower = x_guess
+    y_lower = y_guess
+  else
+    x_higher = x_guess
+    y_higher = y_guess
+  end
+
+  minimum_acceptable = y_ideal
+  maximum_acceptable = y_ideal + $block_header_height_in_pixels + $max_tile_height
+
+  if y_guess.between_inclusive?( minimum_acceptable, maximum_acceptable )
+    puts "The guess was within the acceptable boundaries, breaking."
+    pixel_width_to_use = x_guess
+    break
+  end
+
+end
+
+else
+  pixel_width_to_use = 100000
+end
+
+# Now finally draw the images.
+
+draw_compacted( pixel_width_to_use, "poster-inline", false )
