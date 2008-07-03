@@ -1,0 +1,63 @@
+These scripts require the following binaries:
+
+   ruby (package ruby1.8)
+   curl (package curl)
+   gs   (package ghostscript)
+   make (package make)
+   gocr (package gocr)
+
+... and you will need the following libraries installed:
+
+   libpng12-dev
+
+For composing the poster strips you will need netpbm of at least
+version 10.34.  (I don't think the Debian-free version works
+for this, but I haven't checked in a while.  More on this below.)
+
+Step 1: Extracting the Glyphs
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+You should be able to run:
+
+   ./make-unicode-poster
+
+After a long time (at least a day on my computer) this will generate
+some useful output in the directory individual-characters/non-blank/
+These files include:
+
+  U????-???-????????.png
+
+    The glyph images with Unicode codepoint
+
+  U????-???-????????-top.png
+
+    Just the glyph image, cropped from the image above
+
+  U????-???-????????-bottom.png
+
+    Just the image of the Unicode codepoint, also cropped from the
+    full glyph image.
+
+  sizes.yaml
+
+    Information about the size of the image files and the block
+    that the characters are from.
+
+  codepoints.yaml
+
+    Gives the name of each image glyph and the Unicode codepoint
+    acquired from doing OCR on the 
+
+
+Step 2: Drawing the Poster Strips
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+Step 3: Composing the Poster Strips
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+Step 4: Generating Printable Output
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
