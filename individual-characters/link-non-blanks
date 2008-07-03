@@ -1,14 +1,14 @@
 #!/usr/bin/ruby -w
 
-require 'fileutils'
-require 'tileinfo'
-
 unless FileTest.exists? 'Blocks.txt'
   unless system( "curl", "-s", "ftp://ftp.unicode.org/Public/5.1.0/ucd/Blocks.txt", "-o", "Blocks.txt" )
     STDERR.puts "Couldn't download Blocks.txt."
     exit(-1)
   end
 end
+
+require 'fileutils'
+require 'tileinfo'
 
 s_min_array = Array.new
 s_max_array = Array.new
