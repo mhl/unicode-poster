@@ -47,8 +47,8 @@ open( "non-blank/sizes.yaml", "w" ) do |o|
             s_max_array.push sprintf("%04d maximum dimension of %s", h, f.gsub(/\-\d{8}\./,'.'))
           end
           # o.flush
-          unless system("ln","-s","../#{f}","non-blank/#{f}")
-            puts "ln -s ../#{f} non-blank/#{f} failed"
+          unless system("ln","-s","-f","../#{f}","non-blank/#{f}")
+            puts "ln -s -f ../#{f} non-blank/#{f} failed"
             exit(-1)
           end
         end
