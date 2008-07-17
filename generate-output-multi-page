@@ -1,0 +1,209 @@
+#!/usr/bin/ruby -w
+
+def usage_and_exit
+  STDERR.puts <<EOUSAGE
+Usage: <paper> [ <dpi> ]
+
+... where <paper> is A4 or A0, and <dpi> is probably 300 or 600.  The
+value of <dpi> defaults to 600, and the script will generate .pcl and
+.pjl output if it\'s 600.
+
+EOUSAGE
+  exit(-1)
+end
+
+unless (((ARGV.length == 1) || (ARGV.length == 2)) && ((ARGV[0] == "A4") || (ARGV[0] == "A0")))
+  usage_and_exit
+end
+
+paper = ARGV[0]
+
+if paper == "A0"
+  paper_width_in_inches = 33.11
+  paper_height_in_inches = 46.81
+elsif paper == "A4"
+  paper_width_in_inches = 8.27
+  paper_height_in_inches = 11.69
+end
+
+dpi = ARGV[1]
+if dpi
+  begin
+    dpi = Integer(dpi)    
+  rescue
+    usage_and_exit
+  end
+else
+  dpi = 600
+end
+
+
+puts "paper_height_in_inches_* #{paper_width_in_inches} x #{paper_height_in_inches}"
+
+pnmtops = "/home/mark/netpbm-10.34/package/bin/pnmtops"
+pamscale = "/home/mark/netpbm-10.34/package/bin/pamscale"
+pnmtopng = "/home/mark/netpbm-10.34/package/bin/pnmtopng"
+pgmtoppm = "/home/mark/netpbm-10.34/package/bin/pgmtoppm"
+
+# pnmtops = "pnmtops"
+# pamscale = "pnmscale"
+# pnmtopng = "pnmtopng"
+# pgmtoppm = "pgmtoppm"
+
+# ------------------------------------------------------------------------
+# You probably don't have these:
+# ppmtopcl3 = "/home/mark/ppmtopcl3"
+# pjlsetpcl = "/home/mark/pjl-setpcl"
+# pjlreset = "/home/mark/pjl-reset"
+# ------------------------------------------------------------------------
+
+pnm_files = Dir['poster-complete-*.pnm']
+pnm_files.sort!
+
+pnm_files.each do |pnmfile|
+
+  pnmfile_base = pnmfile.gsub(/.pnm/,'')
+  pnmfile_reduce = pnmfile_base + "-#{paper}-#{dpi}dpi.pam"
+  pngfile_reduce = pnmfile_base + "-#{paper}-#{dpi}dpi.png"
+  ppmfile_reduce = pnmfile_base + "-#{paper}-#{dpi}dpi.ppm"
+  # pclfile_reduce = pnmfile_base + "-#{paper}-#{dpi}dpi.pcl"
+  # pjlfile_reduce = pnmfile_base + "-#{paper}-#{dpi}dpi.pjl"
+  epsfile = pnmfile_base + "-#{paper}-#{dpi}dpi.eps"
+  
+  real_width = nil
+  real_height = nil
+  
+  open(pnmfile) do |f|
+    f.gets
+    line = f.gets
+    unless line =~ /^(\d+) (\d+)/
+      STDERR.puts "This doesn't look like a pnm file to me."
+      exit(-1)
+    end
+    
+    real_width = Integer($1)
+    real_height = Integer($2)  
+    
+  end
+  
+  scaling_width = real_width + 200
+  scaling_height = real_height
+  
+  puts "width with margins for scaling (scaling_width) #{scaling_width}"
+  puts "height with margins for scaling (scaling_height) #{scaling_height}"
+  
+  # pnmtops likes dimensions in inches
+  
+  paper_width_in_inches_smaller = paper_width_in_inches * 0.99
+  paper_height_in_inches_smaller = paper_height_in_inches * 0.99
+  
+  puts "paper_*_in_inches_smaller #{paper_width_in_inches_smaller} x #{paper_height_in_inches_smaller}"
+  
+  # Not exactly sqrt(2) in fact...
+  
+  proportions_of_paper = paper_height_in_inches / paper_width_in_inches
+  
+  proportions_of_bitmap = scaling_height / Float(scaling_width)
+  
+  final_height_in_inches = nil
+  final_width_in_inches = nil
+  
+  if( proportions_of_bitmap > proportions_of_paper )
+    
+    puts("scaling to height...")
+    # Then the height in our bitmap is the one we should scale to.
+    
+    final_height_in_pixels_with_possible_margin = Integer(paper_height_in_inches_smaller * Float(dpi))
+    puts "  final_height_in_pixels_with_possible_margin: #{final_height_in_pixels_with_possible_margin}"
+    
+    pixel_scaling = scaling_height / Float(final_height_in_pixels_with_possible_margin)
+    puts "  pixel_scaling: #{pixel_scaling}"
+    
+    final_width_in_pixels = Integer(real_width / pixel_scaling)
+    final_height_in_pixels = Integer(real_height / pixel_scaling)
+    puts "  final_*_in_pixels: #{final_width_in_pixels} x #{final_height_in_pixels}"
+    
+    final_width_in_inches = final_width_in_pixels / Float(dpi)
+    final_height_in_inches = final_height_in_pixels / Float(dpi)
+    puts "  final_*_in_inches: #{final_width_in_inches} x #{final_height_in_inches}"
+    
+    if FileTest.exists?( pnmfile_reduce )
+      puts "  #{pnmfile_reduce} exists, not regenerating..."
+    else
+      puts "  Generating reduced PNM."
+      command = "#{pamscale} -height #{final_height_in_pixels} #{pnmfile} > #{pnmfile_reduce}"
+      puts "    Running: #{command}"
+      system command
+    end
+    if FileTest.exists?( pngfile_reduce )
+      puts "  #{pngfile_reduce} exists, not regenerating..."
+    else  
+      puts "  Generating reduce PNG from that."
+      command = "#{pnmtopng} -compression=3 #{pnmfile_reduce} > #{pngfile_reduce}"
+      puts "    Running: #{command}"
+      system command
+    end
+    
+    command = "#{pnmtops} -imageheight #{final_height_in_inches} -psfilter -rle #{pnmfile_reduce} > #{epsfile}"
+    puts "  Generating EPS file: #{command}"
+    system command
+    
+  else
+    
+    puts("scaling to width...")
+    # Then the width in our bitmap is the one we should scale to.
+    
+    final_width_in_pixels_with_possible_margin = Integer(paper_width_in_inches_smaller * Float(dpi))
+    puts "  final_width_in_pixels_with_possible_margin: #{final_width_in_pixels_with_possible_margin}"
+    
+    pixel_scaling = scaling_width / Float(final_width_in_pixels_with_possible_margin)
+    puts "  pixel_scaling: #{pixel_scaling}"
+    
+    final_width_in_pixels = Integer(real_width / pixel_scaling)
+    final_height_in_pixels = Integer(real_height / pixel_scaling)
+    puts "  final_*_in_pixels: #{final_width_in_pixels} x #{final_height_in_pixels}"
+    
+    final_width_in_inches = final_width_in_pixels / Float(dpi)
+    final_height_in_inches = final_height_in_pixels / Float(dpi)
+    puts "  final_*_in_inches: #{final_width_in_inches} x #{final_height_in_inches}"
+    
+    if FileTest.exists?( pnmfile_reduce )
+      puts "  #{pnmfile_reduce} exists, not regenerating..."
+    else
+      puts "  Generating reduced PNM."
+      command = "#{pamscale} -width #{final_width_in_pixels} #{pnmfile} > #{pnmfile_reduce}"
+      puts "    Running: #{command}"
+      system command
+    end
+    if FileTest.exists?( pngfile_reduce )
+      puts "  #{pngfile_reduce} exists, not regenerating..."
+    else  
+      puts "  Generating reduce PNG from that."
+      command = "#{pnmtopng} -compression=3 #{pnmfile_reduce} > #{pngfile_reduce}"
+      puts "    Running: #{command}"
+      system command
+    end
+    
+    command = "#{pnmtops} -imageheight #{final_height_in_inches} -psfilter -rle #{pnmfile_reduce} > #{epsfile}"
+    puts "  Generating EPS file: #{command}"
+    system command
+    
+  end
+  
+#  if 600 == dpi
+#
+#    command = "#{pgmtoppm} rgb:ff/ff/ff #{pnmfile_reduce} > #{ppmfile_reduce}"
+#    puts "  Generating PPM file: #{command}"
+#    system command
+#    
+#    command = "#{ppmtopcl3} < #{ppmfile_reduce} > #{pclfile_reduce}"
+#    puts "  Generating PCL file: #{command}"
+#    system command
+#    
+#    command = "cat #{pjlsetpcl} #{pclfile_reduce} #{pjlreset} > #{pjlfile_reduce}"
+#    puts "  Generating PJL file: #{command}"
+#    system command
+#
+#  end
+
+end
