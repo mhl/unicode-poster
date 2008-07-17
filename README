@@ -10,10 +10,11 @@ These scripts require the following binaries:
 ... and you will need the following libraries installed:
 
    libpng12-dev
+   libgd-ruby1.8
 
-You can install these with:
+You can install all of these dependencies with:
 
-  apt-get install ruby1.8 curl ghostscript make imagemagick libpng12-dev
+  apt-get install ruby1.8 curl ghostscript make imagemagick libpng12-dev libgd-ruby1.8
 
 For composing the poster strips you will need netpbm of at least
 version 10.34.  The Debian version of this doesn't support large
