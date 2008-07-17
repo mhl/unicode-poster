@@ -1,0 +1,86 @@
+#!/usr/bin/ruby -w
+
+pngtopnm = "/home/mark/netpbm-10.34/converter/other/pngtopnm"
+pnmtopng = "/home/mark/netpbm-10.34/converter/other/pnmtopng"
+
+png_files = Dir['poster-*-00*.png']
+
+page_numbers = Hash.new
+
+png_files.each do |p|
+  p =~ /^poster-(\d+)-/
+  page_numbers[$1] = true
+  p_converted = p.gsub(/png$/,'pnm')
+  if FileTest.exists?( p_converted )
+    puts "#{p} already converted"
+  else
+    puts "Converting #{p} to PGM"
+    system "#{pngtopnm} #{p} > #{p_converted}"
+  end
+end
+
+pages = page_numbers.length
+
+def pnm_size( filename )
+  
+  size_string = nil
+  
+  open(filename) do |f|
+    f.gets # Read the P5
+    size_string = f.gets # Read the width and height
+  end
+
+  if size_string =~ /^(\d+) (\d+) */
+    return [ Integer($1), Integer($2) ]
+  else
+    return nil
+  end
+
+end
+
+0.upto(pages-1) do |i|
+
+  width = nil
+  total_height = 0
+
+  pnm_files = Dir[sprintf('poster-%02d-00*.pnm',i)]
+  pnm_files.sort!
+
+  pnm_files.each do |p|
+
+    w, h = pnm_size( p )
+
+    if width
+      if w != width
+        raise "BUG: Not all the same width!"
+      end
+    else
+      width = w
+    end
+
+    total_height += h
+    
+  end
+
+  output_file = sprintf('poster-complete-%02d.pnm',i)
+  output_file_png = sprintf('poster-complete-%02d.png',i)
+
+  open( output_file, "w" ) do |o|
+    o.puts("P5")
+    o.puts("#{width} #{total_height}")
+    o.puts("255")
+    pnm_files.each do |p|
+      puts "Concatenating #{p}..."
+      open(p) do |f|
+        f.gets # Read the P5
+        f.gets # Read the width and height
+        f.gets # Read the 255
+        o.write(f.read)
+      end
+    end
+  end
+
+  # puts "Converting to a PNG"
+  # system "#{pnmtopng} #{output_file} > #{output_file_png}"
+
+end
