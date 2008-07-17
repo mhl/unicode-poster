@@ -22,11 +22,11 @@ require 'individual-characters/tileinfo.rb'
 
 $pages_hash = Hash.new
 
-files = Dir['U*-*-*-top.png']
+files = Dir['individual-characters/non-blank/U*-*-*-top.png']
 
 files.each do |png_file|
 
-  $pages_hash[png_file.gsub(/\-\d{3}\-\d{8}-top\..*/,'')] = Array.new
+  $pages_hash[png_file.gsub(/^.*\/(U.+)\-\d{3}\-\d{8}-top\..*/,'\1')] = Array.new
 
 end
 
@@ -107,7 +107,7 @@ $pages.each do |p|
   puts "#{p} (#{name_of_page(p)})"
 end
 
-$info_hash = YAML.load( open( "top-sizes.yaml", "r" ){ |f| f.read } )
+$info_hash = YAML.load( open( "individual-characters/non-blank/top-sizes.yaml", "r" ){ |f| f.read } )
 
 $info_hash.each_key do |png_file|
   # puts "key from $info_hash was: #{png_file}"
@@ -215,7 +215,7 @@ class ImageToDraw
   end
   
   def draw_to( im, color, leave_header_space )
-    im_tile = GD::Image.new_from_png( @image_file )
+    im_tile = GD::Image.new_from_png( "individual-characters/non-blank/#{@image_file}" )
     y = 0
     im_tile.copy( im, x, y, 0, 0, im_tile.width, im_tile.height)
     im_tile.destroy
