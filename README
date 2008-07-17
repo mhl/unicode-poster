@@ -1,18 +1,25 @@
 These scripts require the following binaries:
 
-   ruby (package ruby1.8)
-   curl (package curl)
-   gs   (package ghostscript)
-   make (package make)
-   gocr (package gocr)
+   ruby    (package ruby1.8)
+   curl    (package curl)
+   gs      (package ghostscript)
+   make    (package make)
+   gocr    (package gocr)
+   convert (package imagemagick)
 
 ... and you will need the following libraries installed:
 
    libpng12-dev
 
 For composing the poster strips you will need netpbm of at least
-version 10.34.  (I don't think the Debian-free version works
-for this, but I haven't checked in a while.  More on this below.)
+version 10.34.  The Debian version of this doesn't support large
+files properly the last time I checked, so you'll need to compile
+your own version.  See steps 4 and 5 for more on this.
+
+A completed build tree for this poster is about 28GiB for me so
+you need lots of disk space.  One of the stages creates
+symlinks, so make sure you're doing this on a filesystem that
+supports them.
 
 Step 1: Extracting the Glyphs
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -46,18 +53,174 @@ These files include:
   codepoints.yaml
 
     Gives the name of each image glyph and the Unicode codepoint
-    acquired from doing OCR on the 
-
+    acquired from doing OCR on the codepoint in the image.  These
+    values will have a number of errors in them, since the OCR isn't
+    perfect; if you want to be able to map each image to a codepoint,
+    see the option Step 5 below.
 
 Step 2: Drawing the Poster Strips
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+The script "compose-inline-breaks" will create poster strips
+from these blocks.  You can invoke it like:
 
+  ./compose-inline-breaks "Unicode 5.1.0 (Single Page Test)" 1
+
+... where the first argument is the title of the page and the
+second argument is the number of posters to spread across.  This
+will generate a series of strips that we can compose into the
+final posters, called something like: 
+
+  poster-inline-breaks-00-00000030.png
+
+Note that these images are up to 90000 pixels wide, which
+creates a number of problems.  You can view them in gimp quite
+happily, but many other programs won't cope.  There are even
+bugs in some graphical file managers that mean that your file
+manager will crash if you open this directory.
 
 Step 3: Composing the Poster Strips
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+Composing these strips into the final poster images is quite tricky
+since many programs won't cope elegantly with such large images.
+netpbm (in the non-Debian version) works find for this, however.
+You'll need to compile this yourself, so download netpbm 10.34 and
+build it.  Then edit the paths that contain "/home/mark" in the scripts
+
+     generate-output-multi-page
+ and compose-pnm-files-multi-page
+
+... to get to the versions you've just built.
+
+Now, to compose the strips into a single file, just run:
+
+  ./compose-pnm-files-multi-page
+
+That script converts each strip to PGM, concatenates them into
+gigantic PNM files, one per page of poster.
+
+****** WARNING *****
+
+   You need a great deal of disk space for this to run to
+   completion.  The strips converted to PGM will be about 12GB
+   in size.  The concatenated version is another 12GB.  So,
+   before you consider running this file you probably want to
+   make sure that you have 30GB of disk free to be on the safe
+   side.
+
+********************
+
+The eventual output should be called (for a single page poster):
+
+  poster-complete-00.pnm
+
+... or multiple files for multi-page posters.  Once you're confident
+that this is what you want you can save 12GB by removing the
+poster-inline-breaks*.pnm files.
+
+In some sense this is the final output (a complete poster!) but
+it's 12GB and 90000x130000 pixels, so not very useful for
+printing.  To generate output you have a chance of printing see
+the next section:
 
 Step 4: Generating Printable Output
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+  [This is by far the worst script, but you'll probably want to
+  customize it quite a bit anyway, depending on what your
+  printing situation is - see Step 5.]
 
+Make sure that you've edited generate-output-multi-page to correct the
+paths to netpbm tools, and then as a test you can try generating some
+600dpi A4 versions:
+
+  ./generate-output-multi-page A4 600
+
+If the PNG and EPS files generated from that look sensible then
+you can try:
+
+  ./generate-output-multi-page A0 600
+
+... to generate A0 versions.
+
+Step 5: Printing Out Your Poster
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+ 1. Find someone with an A0 plotter.
+
+ 2. Negotiate with them at great length about whether what you
+    want to do is sensible (it is :)) and what file formats they
+    can deal with.
+
+Step 1 is relatively easy, and step 2 is often very difficult.
+Some printers will want to load the bitmap into Photoshop and
+print it out from there.  That will probably work OK, but you
+have to be very careful that they don't enable any option in the
+"Print" dialog that will cause JPEG compression to be applied to
+your image or the output will look horrible.  Even at A0 size
+you really need the fine detail for this poster.
+
+Many of the large HP plotters will accept TIFF files if you can
+send files directly to them - this sometimes takes some
+negotiation.  Before doing this, make sure that the resolution
+set in the TIFF file is correct for your poster.
+
+One other option here is to use pamdice to split the A0 image
+into many A4 sheets that you can stick together.  It's much
+nicer to have a proper A0 version, though.
+
+Good luck with this step - I've found it a bit of a nightmare :/
+
+[Optional] Step 5: Mapping Codepoints to Glyph Images
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For a number of applications you might want to be able to find the
+glyph image for a particular codepoint.  In order to do this, you'll
+need to correct the generated codepoints.yaml file.  We can detect
+most of the errors (all if we're lucky) by looking for the codepoint
+values that appear to be out of place.  The script in this directory
+called "test-codepoints" is designed for this.  You should do the
+following:
+
+ # ./test-codepoints 
+ Problem with: U0C00-002-00000099.png => 0x0CS3
+    Not a Fixnum
+ Problem with: U0E00-002-00000016.png => 0x
+    Not a Fixnum
+ Problem with: U1D400-002-00000165.png => 0x_D4A5
+    Not a Fixnum
+ Problem with: U1D400-002-00000181.png => 0x_D4B5
+    Not a Fixnum
+ Problem with: U1D400-002-00000191.png => 46271
+    Out of order...
+ Problem with: U1D400-002-00000198.png => 0x1_4C6
+    Not a Fixnum
+ [.. etc ..]
+
+For each of these, do something like:
+
+  # Look for what the codepoint should be from the image:
+  xli U0C00-002-00000099.png
+  
+  # Correct it in the file:
+  emacs individual-characters/non-blank/codepoints.yaml
+
+Run ./test-codepoints again and correct any further errors,
+repeating if necessary.  Once that's done you can use the script
+./copy-characters-to-webspace to scale them down by 50% and copy
+the glyph images to a directory where they'll have sensible
+names:
+
+  mkdir ~/renamed-unicode-glyphs/
+
+  ./copy-characters-to-webspace individual-characters/non-blank/codepoints.yaml ~/renamed-unicode-glyphs/
+
+Those files will be called things like:
+
+  reduced-0x00260E.png
+
+... for U+00260E (BLACK TELEPHONE)
+
+------------------------------------------------------------------------
+
+Mark Longair <mark-unicode@longair.net>
