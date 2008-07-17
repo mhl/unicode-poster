@@ -8,7 +8,7 @@ png_files = Dir['poster-*-00*.png']
 page_numbers = Hash.new
 
 png_files.each do |p|
-  p =~ /^poster-(\d+)-/
+  p =~ /^poster-inline-breaks-(\d+)-/
   page_numbers[$1] = true
   p_converted = p.gsub(/png$/,'pnm')
   if FileTest.exists?( p_converted )
@@ -43,7 +43,7 @@ end
   width = nil
   total_height = 0
 
-  pnm_files = Dir[sprintf('poster-%02d-00*.pnm',i)]
+  pnm_files = Dir[sprintf('poster-inline-breaks-%02d-00*.pnm',i)]
   pnm_files.sort!
 
   pnm_files.each do |p|
