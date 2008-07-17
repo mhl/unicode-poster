@@ -1,3 +1,6 @@
 *.png
 *.pdf
 *~
+poster-inline-breaks-*
+poster-complete-*
+Blocks.txt
