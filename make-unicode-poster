@@ -328,8 +328,8 @@ open( "top-sizes.yaml", "w" ) do |o_top_sizes|
         end
 
         if top_width and top_height
-            o_top_sizes.puts("#{fname}: !ruby/object:TileInfo")
-            o_top_sizes.puts("  filename: #{fname}")
+            o_top_sizes.puts("#{top_part_fname}: !ruby/object:TileInfo")
+            o_top_sizes.puts("  filename: #{top_part_fname}")
             o_top_sizes.puts("  h: #{top_height}")
             o_top_sizes.puts("  w: #{top_width}")
             o_top_sizes.puts("  block: #{block_name}")
