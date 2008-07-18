@@ -11,18 +11,11 @@ end
 $title = ARGV[0]
 $number_of_pages = Integer(ARGV[1])
 
-unless FileTest.exists?( 'Blocks.txt' )
-  unless system( "curl", "-s", "ftp://ftp.unicode.org/Public/5.1.0/ucd/Blocks.txt", "-o", "Blocks.txt" )
-    STDERR.puts "Couldn't download Blocks.txt."
-    exit(-1)
-  end
-end
-
-require 'individual-characters/tileinfo.rb'
+require 'tileinfo.rb'
 
 $pages_hash = Hash.new
 
-files = Dir['individual-characters/non-blank/U*-*-*-top.png']
+files = Dir['individual-characters/U*-*-*-top.png']
 
 files.each do |png_file|
 
@@ -107,11 +100,11 @@ $pages.each do |p|
   puts "#{p} (#{name_of_page(p)})"
 end
 
-$info_hash = YAML.load( open( "individual-characters/non-blank/top-sizes.yaml", "r" ){ |f| f.read } )
+$info_hash = YAML.load( open( "top-sizes.yaml", "r" ){ |f| f.read } )
 
 $info_hash.each_key do |png_file|
   # puts "key from $info_hash was: #{png_file}"
-  from_page = png_file.gsub(/\-\d{3}\-\d{8}-top\..*/,'')
+  from_page = png_file.gsub(/^.*(U[0-9A-Fa-f]+)\-\d{3}\-\d{8}-top\.png$/,'\1')
   $pages_hash[from_page].push(png_file)
 end
 
@@ -215,7 +208,7 @@ class ImageToDraw
   end
   
   def draw_to( im, color, leave_header_space )
-    im_tile = GD::Image.new_from_png( "individual-characters/non-blank/#{@image_file}" )
+    im_tile = GD::Image.new_from_png( @image_file )
     y = 0
     im_tile.copy( im, x, y, 0, 0, im_tile.width, im_tile.height)
     im_tile.destroy

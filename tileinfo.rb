@@ -1,3 +1,9 @@
+unless FileTest.exists? 'Blocks.txt'
+  unless system( "curl", "-s", "ftp://ftp.unicode.org/Public/5.1.0/ucd/Blocks.txt", "-o", "Blocks.txt" )
+    STDERR.puts "Couldn't download Blocks.txt."
+    exit(-1)
+  end
+end
 
 def safe_backticks( *command )
 
@@ -77,7 +83,8 @@ open("Blocks.txt","r") do |f|
   end
 end
 
-# This returns nil if we should skip it...
+# This returns nil if we should skip it or a string with the name
+# otherwise:
 
 def name_of_page( file_basename )
 
@@ -112,9 +119,9 @@ class TileInfo
 
   def TileInfo.from_filename( filename )
     d = nil
-    s = `../../png-find-grid/png-size #{filename}`.chomp
+    s = `png-find-grid/png-size #{filename}`.chomp
     unless $?.success?
-      puts "../../png-find-grid/png-size #{filename} failed"
+      puts "png-find-grid/png-size #{filename} failed"
       exit(-1)
     end
     if s =~ /^(\d+)x(\d+)/

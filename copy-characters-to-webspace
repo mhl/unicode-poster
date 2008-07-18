@@ -24,7 +24,7 @@ data.each do |e|
   unless system( "convert",
                  "-scale",
                  "50%",
-                 "individual-characters/non-blank/" + name.gsub(".png","-top.png"),
+                 "individual-characters/" + name.gsub(".png","-top.png"),
                  destination_directory + "reduced-" + new_name )
     puts "Failed to convert and copy: #{name}"
     exit(-1)

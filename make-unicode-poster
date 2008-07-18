@@ -1,6 +1,6 @@
 #!/usr/bin/ruby -w
 
-charts_index_page = "http://www.unicode.org/charts/PDF/"
+require 'tileinfo.rb'
 
 # The directory with the helper files:
 helpers = "png-find-grid-revised"
@@ -9,6 +9,8 @@ unless system("cd #{helpers} && make")
   puts "Failed to build the helper programs.  Is libpng12-dev installed?"
   exit(-1)
 end
+
+charts_index_page = "http://www.unicode.org/charts/PDF/"
 
 index_html = `curl -s #{charts_index_page}`
 unless $?.success?
@@ -82,7 +84,6 @@ end
 puts "Globbing directory..."
 
 png_files = Dir['U*-*.png']
-# png_files = [ "U0000-002.png", "UFB50-004.png" ]
 
 some_done_done_from = Hash.new
 already_output_files = Dir['individual-characters/U*-*-*.png']
@@ -225,12 +226,140 @@ png_files.each do |png_file|
 
 end
 
-unless system "cd individual-characters && ./link-non-blanks"
-  puts "The link-non-blanks script failed"
-  exit(-1)
+def compare_tile_filenames( a, b )
+  Integer( a.gsub( /^.*U([0-9A-F]+)\-([0-9A-F]+)\-([0-9A-F]+).*\.png$/, '0x\1\2\3' ) ) <=>
+    Integer( b.gsub( /^.*U([0-9A-F]+)\-([0-9A-F]+)\-([0-9A-F]+).*\.png$/, '0x\1\2\3' ) )
 end
 
-unless system "cd individual-characters/non-blank && ./extract-numbers"
-  puts "The extract-numbers script failed"
-  exit(-1)
+files = Dir['individual-characters/U*-*-*.png']
+
+# If this is a repeat run then we may have some leftover -top and
+# -bottom files here:
+
+files.delete_if { |x| x =~ /top/ }
+files.delete_if { |x| x =~ /bottom/ }
+
+files.sort! { |a,b| compare_tile_filenames( a, b ) }
+
+# ------------------------------------------------------------------------
+
+last_block = -1
+
+open( "top-sizes.yaml", "w" ) do |o_top_sizes|
+
+  o_top_sizes.puts "---"
+
+  open( "codepoints.yaml", "w" ) do |o_codepoints|
+
+    files.each do |fname|
+
+      fname =~ /U([0-9A-F]+)-([0-9A-F]+)/
+
+      block = Integer("0x"+$1)
+
+      if block != last_block
+        puts "Extracting numbers from block: " + sprintf("0x%06X",block)
+        last_block = block
+      end
+
+      block_name = name_of_page(fname.gsub(/^.*(U[0-9A-F]+).*$/,'\1'))
+      next unless block_name
+
+      info = `#{helpers}/png-size #{fname}`
+      unless $?.success?
+        puts "png-size #{fname} failed."
+        next
+      end
+
+      width = nil
+      height = nil
+
+      info.chomp!
+      if info =~ /(\d+)x(\d+)/
+
+        width = Integer($1)
+        height = Integer($2)
+
+        top_part_fname = fname.sub( /.png/, '-top.png' )
+        bottom_part_fname = fname.sub( /.png/, '-bottom.png' )
+
+        guessed_text_size = 75
+
+        text_starts_at = height - guessed_text_size
+
+        p = IO.popen( "#{helpers}/crop-images #{fname}", "w" )
+
+        p.puts( "#{top_part_fname} 0 0 #{width} #{text_starts_at}" )
+        p.puts( "#{bottom_part_fname} 0 #{text_starts_at} #{width} #{guessed_text_size}" )
+
+        p.close
+        unless $?.success?
+          puts "#{helpers}/crop-images #{fname} failed."
+          exit(-1)
+        end
+
+        top_width = nil
+        top_height = nil
+
+        output = safe_backticks("#{helpers}/empty-image",top_part_fname)
+        if $?.success?
+          puts "Empty, skipping: #{fname}"
+          system("rm",top_part_fname)
+          system("rm",bottom_part_fname)
+          next
+        else
+          output.chomp!
+          if output =~ /^(\d+) (\d+)/
+            top_width = Integer($1)
+            top_height = Integer($2)
+          end
+        end
+
+        # Check that the bottom part isn't hashed out, and delete
+        # it if so:
+
+        output = safe_backticks("#{helpers}/bottom-line-proportion",bottom_part_fname)
+        proportion = Float(output)
+        if proportion > 0.01
+          puts "Probably cross-hatched, skipping: #{fname}"
+          system("rm",top_part_fname)
+          system("rm",bottom_part_fname)
+          next
+        end
+
+        if top_width and top_height
+            o_top_sizes.puts("#{fname}: !ruby/object:TileInfo")
+            o_top_sizes.puts("  filename: #{fname}")
+            o_top_sizes.puts("  h: #{top_height}")
+            o_top_sizes.puts("  w: #{top_width}")
+            o_top_sizes.puts("  block: #{block_name}")
+        end
+
+        # Now use OCR to try to parse the codepoint out of the bottom
+        # part:
+
+        result = `pngtopnm #{bottom_part_fname} | ocrad -`
+        unless $?.success?
+          puts "png-topnm #{bottom_part_fname} | ocrad - failed."
+          exit(-1)
+        end
+
+        result.chomp!
+        result.gsub!( /\s/, '' )
+        result.gsub!( /[oO]/, '0' )
+        result.gsub!( /a/, '8' )
+        result.gsub!( /g/, '9' )
+
+        result.upcase!
+
+        o_codepoints.puts "-"
+        o_codepoints.puts '  - "' + fname + '"'
+        o_codepoints.puts "  - " + "0x" + result
+
+      end
+
+    end
+
+  end
+
 end
