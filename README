@@ -4,7 +4,7 @@ These scripts require the following binaries:
    curl    (package curl)
    gs      (package ghostscript)
    make    (package make)
-   gocr    (package gocr)
+   ocrad   (package ocrad)
    convert (package imagemagick)
 
 ... and you will need the following libraries installed:
@@ -14,7 +14,7 @@ These scripts require the following binaries:
 
 You can install all of these dependencies with:
 
-  apt-get install ruby1.8 curl ghostscript make imagemagick libpng12-dev libgd-ruby1.8
+  apt-get install ruby1.8 curl ghostscript make ocrad imagemagick libpng12-dev libgd-ruby1.8
 
 For composing the poster strips you will need netpbm of at least
 version 10.34.  The Debian version of this doesn't support large
