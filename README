@@ -16,15 +16,24 @@ You can install all of these dependencies with:
 
   apt-get install ruby1.8 curl ghostscript make ocrad imagemagick libpng12-dev libgd-ruby1.8
 
-For composing the poster strips you will need netpbm of at least
-version 10.34.  The Debian version of this doesn't support large
-files properly the last time I checked, so you'll need to compile
-your own version.  See steps 4 and 5 for more on this.
+For composing the poster strips you will need the upstream
+version of netpbm of at least version 10.34, which you can get
+from:
 
-A completed build tree for this poster is about 28GiB for me so
-you need lots of disk space.  One of the stages creates
-symlinks, so make sure you're doing this on a filesystem that
-supports them.
+  http://netpbm.sourceforge.net/
+
+The Debian packaged version of netpbm is very different from the
+upstream, and unfortunately I've only got these scripts to work
+properly with the latter.  (The reasons for the Debian fork are
+good ones: the license situation of the upstream netpbm tools is
+very confused and there was concern over buffer overflows.  As a
+result, I'd recommend that you use only use the upstream version
+for this application and submit bugs or patches to the Debian
+BTS to help improve the Debian-packaged version.)  See steps 4
+and 5 for details of how to get the upstream netpbm.
+
+A completed build tree for this poster is about 18 GiB for me so
+you need lots of disk space.
 
 Step 1: Extracting the Glyphs
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -33,9 +42,9 @@ You should be able to run:
 
    ./make-unicode-poster
 
-After a long time (at least a day on my computer) this will generate
-some useful output in the directory 'individual-characters'. These
-files include:
+After a long time (at least a day on my computer) this will
+generate some useful output in the directory
+'individual-characters'. These files include:
 
   U????-???-????????.png
 
@@ -47,26 +56,27 @@ files include:
 
   U????-???-????????-bottom.png
 
-    Just the image of the Unicode codepoint, also cropped from the
-    full glyph image.
+    Just the image of the Unicode codepoint number, also cropped
+    from the full glyph image.
 
 In the base directory there will also be:
 
   top-sizes.yaml
 
-    Information about the size of the -top.png image files and the
-    block that the characters are from.
+    Information about the size of the -top.png image files and
+    the block that the characters are from.
 
   codepoints.yaml
 
     This file gives the name of each image glyph and the Unicode
-    codepoint acquired from doing OCR on the codepoint in the image.
-    These values will have a number of errors in them, since the OCR
-    isn't perfect; if you want to be able to map each image to a
-    codepoint, see the option Step 5 below.
+    codepoint acquired from doing OCR on the codepoint in the
+    image.  These values will have a number of errors in them,
+    since the OCR isn't perfect; if you want to be able to map
+    each image to a codepoint, see the option Step 5 below.
 
 Step 2: Drawing the Poster Strips
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 The script "compose-inline-breaks" will create poster strips
 from these blocks.  You can invoke it like:
 
@@ -88,12 +98,12 @@ manager will crash if you open this directory.
 Step 3: Composing the Poster Strips
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Composing these strips into the final poster images is quite tricky
-since many programs won't cope elegantly with such large images.
-netpbm (in the non-Debian version) works fine for this, however.
-You'll need to compile this yourself, so download netpbm 10.34 and
-build it.  Then edit the paths that contain "/home/mark" in the
-scripts:
+Composing these strips into the final poster images is quite
+tricky since many programs won't cope elegantly with such large
+images.  netpbm (in the non-Debian version) works fine for this,
+however.  You'll need to compile this yourself, so download
+netpbm 10.34 and build it.  Then edit the paths that contain
+"/home/mark" in the scripts:
 
        generate-output-multi-page
  and   compose-pnm-files-multi-page
@@ -104,17 +114,16 @@ Now, to compose the strips into a single file, just run:
 
   ./compose-pnm-files-multi-page
 
-That script converts each strip to PGM, concatenates them into
-gigantic PNM files, one per page of poster.
+That script converts each strip to PGM format and concatenates
+them into gigantic PNM files, one per page of poster.
 
 ****** WARNING *****
 
    You need a great deal of disk space for this to run to
-   completion.  The strips converted to PGM will be about 12GB
-   in size.  The concatenated version is another 12GB.  So,
-   before you consider running this file you probably want to
-   make sure that you have 30GB of disk free to be on the safe
-   side.
+   completion.  The concatenated version of the poster is about
+   12GB.  So, before you consider running this file you probably
+   want to make sure that you have 30GB of disk free to be on
+   the safe side.
 
 ********************
 
@@ -122,9 +131,7 @@ The eventual output should be called (for a single page poster):
 
   poster-complete-00.pnm
 
-... or multiple files for multi-page posters.  Once you're confident
-that this is what you want you can save 12GB by removing the
-poster-inline-breaks*.pnm files.
+... or multiple files for multi-page posters.
 
 In some sense this is the final output (a complete poster!) but
 it's 12GB and 90000x130000 pixels, so not very useful for
