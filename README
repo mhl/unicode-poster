@@ -34,8 +34,8 @@ You should be able to run:
    ./make-unicode-poster
 
 After a long time (at least a day on my computer) this will generate
-some useful output in the directory individual-characters/non-blank/
-These files include:
+some useful output in the directory 'individual-characters'. These
+files include:
 
   U????-???-????????.png
 
@@ -50,18 +50,20 @@ These files include:
     Just the image of the Unicode codepoint, also cropped from the
     full glyph image.
 
-  sizes.yaml
+In the base directory there will also be:
 
-    Information about the size of the image files and the block
-    that the characters are from.
+  top-sizes.yaml
+
+    Information about the size of the -top.png image files and the
+    block that the characters are from.
 
   codepoints.yaml
 
-    Gives the name of each image glyph and the Unicode codepoint
-    acquired from doing OCR on the codepoint in the image.  These
-    values will have a number of errors in them, since the OCR isn't
-    perfect; if you want to be able to map each image to a codepoint,
-    see the option Step 5 below.
+    This file gives the name of each image glyph and the Unicode
+    codepoint acquired from doing OCR on the codepoint in the image.
+    These values will have a number of errors in them, since the OCR
+    isn't perfect; if you want to be able to map each image to a
+    codepoint, see the option Step 5 below.
 
 Step 2: Drawing the Poster Strips
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -88,12 +90,13 @@ Step 3: Composing the Poster Strips
 
 Composing these strips into the final poster images is quite tricky
 since many programs won't cope elegantly with such large images.
-netpbm (in the non-Debian version) works find for this, however.
+netpbm (in the non-Debian version) works fine for this, however.
 You'll need to compile this yourself, so download netpbm 10.34 and
-build it.  Then edit the paths that contain "/home/mark" in the scripts
+build it.  Then edit the paths that contain "/home/mark" in the
+scripts:
 
-     generate-output-multi-page
- and compose-pnm-files-multi-page
+       generate-output-multi-page
+ and   compose-pnm-files-multi-page
 
 ... to get to the versions you've just built.
 
@@ -218,7 +221,7 @@ names:
 
   mkdir ~/renamed-unicode-glyphs/
 
-  ./copy-characters-to-webspace individual-characters/non-blank/codepoints.yaml ~/renamed-unicode-glyphs/
+  ./copy-characters-to-webspace codepoints.yaml ~/renamed-unicode-glyphs/
 
 Those files will be called things like:
 
