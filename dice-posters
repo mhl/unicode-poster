@@ -1,0 +1,49 @@
+#!/usr/bin/ruby -w
+
+subdirectory = "diced-#{Time.now.to_i}"
+# subdirectory = "diced-hello"
+
+pamdice = "/home/mark/netpbm-10.34/package/bin/pamdice"
+pnmtops = "/home/mark/netpbm-10.34/package/bin/pnmtops"
+
+system("mkdir",subdirectory)
+
+originals = Dir["poster-complete-*-A0-600dpi.pam"]
+
+originals.each do |o|
+  # Find the size:
+  width = height = nil
+  open(o) do |f|
+    f.gets
+    unless f.gets =~ /^(\d+) (\d+)/
+      STDERR.puts "This doesn't look like a pnm file to me."
+      exit(-1)
+    end
+    width = Integer($1)
+    height = Integer($2)
+  end
+  split_width = (width / 4.0).ceil
+  split_height = (height / 4.0).ceil
+  # Get the page number:
+  unless o =~ /poster-complete-(\d{2})/
+    puts "Couldn't find page number from filename: #{o}"
+    exit(-1)
+  end
+  page = $1
+  system(pamdice,
+         "-outstem=#{subdirectory}/diced-#{page}",
+         "-width=#{split_width}",
+         "-height=#{split_height}",
+         o)
+
+end
+
+# Convert each to EPS:
+pgm_files = Dir[subdirectory+"/*.pgm"]
+pgm_files.each do |p|
+  epsfile = p.gsub(/\.pgm/,'.eps')
+  # full A4 would be 11.75 (ish)
+  command = "#{pnmtops} -height 11 -imageheight 11 -psfilter -rle #{p} > #{epsfile}"
+  puts command
+  system command
+end
