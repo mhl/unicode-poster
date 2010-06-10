@@ -52,7 +52,8 @@ pdfs_to_skip['U100000.pdf'] = "Supplementary Private Use Area-B"
 
 pdf_names.each do |p|
 
-  png_name = p.gsub( /.pdf$/, '-%03d.png' )
+  png_template = p.gsub( /.pdf$/, '-%03d.png' )
+  png_root = p.gsub( /.pdf$/, '' )
 
   second_png_name = p.gsub( /\.pdf/, '-002.png' )
 
@@ -61,24 +62,32 @@ pdf_names.each do |p|
   elsif pdfs_to_skip[p]
     puts "We're supposed to skip #{p}"
   else
-    puts "Converting #{p} to #{png_name}"
-    unless system( "gs",
-                   "-sOutputFile=#{png_name}",
-                   "-dNOPAUSE",
-                   "-dSAFER",
-                   "-dBATCH",
-                   "-q",
-                   "-sDEVICE=pnggray",
-                   "-r800",
-                   "-dGraphicsAlphaBits=4",
-                   "-dTextAlphaBits=4",
-                   p )
-
+    puts "Converting #{p} to #{png_template}"
+    unless system( "pdftoppm",
+                   "-r", "800",
+                   "-png",
+                   p,
+                   png_root)
       puts "Failed to convert #{p} to a series of PNG files"
       exit(-1)
     end
+    # Annoyingly, pdftoppm doesn't have an option to format the page
+    # number to a fixed width, so rename the files we've just
+    # generated:
+    Dir[png_root+'*'+'.png'].sort.each do |o|
+      if o =~ /([0-9]+)\.png/
+        n = $1.to_i
+        new_name = sprintf(png_template,n)
+        unless system( "mv", o, new_name )
+          puts "Failed to rename PNG file from #{o} to #{new_name}"
+          exit(-1)
+        end
+      else
+        puts "Found a PNG file that didn't match: #{o}"
+        exit(-1)
+      end
+    end
   end
-
 end
 
 puts "Globbing directory..."
