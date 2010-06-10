@@ -1,5 +1,6 @@
 These scripts require the following binaries:
 
+   jruby    (package jruby)
    ruby     (package ruby1.8)
    curl     (package curl)
    pdftoppm (package poppler-utils)
@@ -14,7 +15,7 @@ These scripts require the following binaries:
 
 You can install all of these dependencies with:
 
-  apt-get install ruby1.8 ruby curl poppler-utils make ocrad imagemagick libpng12-dev libgd-ruby1.8
+  apt-get install jruby ruby1.8 ruby curl poppler-utils make ocrad imagemagick libpng12-dev libgd-ruby1.8
 
 For composing the poster strips you will need the upstream
 version of netpbm of at least version 10.34, which you can get

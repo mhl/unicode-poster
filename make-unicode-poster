@@ -1,6 +1,9 @@
-#!/usr/bin/ruby -w
+#!/usr/bin/jruby -w
 
 require 'tileinfo.rb'
+require 'thread'
+
+include Java
 
 # The directory with the helper files:
 helpers = "png-find-grid-revised"
@@ -50,6 +53,12 @@ pdfs_to_skip['UE000.pdf'] = "Private Use Area"
 pdfs_to_skip['UF0000.pdf'] = "Supplementary Private Use Area-A"
 pdfs_to_skip['U100000.pdf'] = "Supplementary Private Use Area-B"
 
+threads = []
+max_threads = java.lang.Runtime.getRuntime.availableProcessors
+mutex = Mutex.new
+condition = ConditionVariable.new
+running_threads = 0
+
 pdf_names.each do |p|
 
   png_template = p.gsub( /.pdf$/, '-%03d.png' )
@@ -57,38 +66,69 @@ pdf_names.each do |p|
 
   second_png_name = p.gsub( /\.pdf/, '-002.png' )
 
-  if FileTest.exist?( second_png_name )
-    puts "#{p} has probably already been converted"
-  elsif pdfs_to_skip[p]
-    puts "We're supposed to skip #{p}"
-  else
-    puts "Converting #{p} to #{png_template}"
-    unless system( "pdftoppm",
-                   "-r", "800",
-                   "-png",
-                   p,
-                   png_root)
-      puts "Failed to convert #{p} to a series of PNG files"
-      exit(-1)
-    end
-    # Annoyingly, pdftoppm doesn't have an option to format the page
-    # number to a fixed width, so rename the files we've just
-    # generated:
-    Dir[png_root+'*'+'.png'].sort.each do |o|
-      if o =~ /([0-9]+)\.png/
-        n = $1.to_i
-        new_name = sprintf(png_template,n)
-        unless system( "mv", o, new_name )
-          puts "Failed to rename PNG file from #{o} to #{new_name}"
-          exit(-1)
-        end
+  skipping = true
+
+  threads << Thread.new {
+
+    mutex.synchronize {
+      condition.wait(mutex) while running_threads >= max_threads
+      running_threads += 1
+      condition.signal if running_threads < max_threads
+
+      # I'm just keeping this in the mutex so that the printed output
+      # doesn't look ugly :)
+
+      if FileTest.exist?( second_png_name )
+        puts "#{p} has probably already been converted"
+      elsif pdfs_to_skip[p]
+        puts "We're supposed to skip #{p}"
       else
-        puts "Found a PNG file that didn't match: #{o}"
+        puts "Converting #{p} to #{png_template}"
+        skipping = false
+      end
+
+    }
+
+    unless skipping
+
+      unless system( "pdftoppm",
+                     "-r", "800",
+                     "-png",
+                     p,
+                     png_root)
+        puts "Failed to convert #{p} to a series of PNG files"
         exit(-1)
       end
+
+      # Annoyingly, pdftoppm doesn't have an option to format the page
+      # number to a fixed width, so rename the files we've just
+      # generated:
+
+      Dir[png_root+'*'+'.png'].sort.each do |o|
+        if o =~ /([0-9]+)\.png/
+          n = $1.to_i
+          new_name = sprintf(png_template,n)
+          next if o == new_name
+          unless system( "mv", o, new_name )
+            puts "Failed to rename PNG file from #{o} to #{new_name}"
+            exit(-1)
+          end
+        else
+          puts "Found a PNG file that didn't match: #{o}"
+          exit(-1)
+        end
+      end
     end
-  end
+
+    mutex.synchronize {
+      running_threads -= 1
+      condition.signal if running_threads < max_threads
+    }
+  }
+
 end
+
+threads.each {|t| t.join}
 
 puts "Globbing directory..."
 
