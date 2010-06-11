@@ -148,132 +148,163 @@ pngs_with_no_grid.each do |already_done|
   end
 end
 
+threads = []
+running_threads = 0
+
 png_files.each do |png_file|
 
-  next if png_file =~ /U.*-001.png/
+  threads << Thread.new {
 
-  if some_done_done_from[png_file]
-    puts "Looks as if we've already split #{png_file}"
-    next
-  end
+    skipping = false
 
-  puts "Splitting characters out of each PNG file... "
-  puts " Considering: "+png_file
+    mutex.synchronize {
+      condition.wait(mutex) while running_threads >= max_threads
+      running_threads += 1
+      condition.signal if running_threads < max_threads
 
-  png_output_template = "individual-characters/" + png_file.gsub(/\.png/,"-%08d.png")
-
-  last_in_each_cell_y = nil
-  first_in_each_cell_y = nil
-
-  last_in_each_cell_x = nil
-  first_in_each_cell_x = nil
-
-  # The find-grid program gets certain code pages wrong, and one of
-  # the PDF files shouldn't be in there.
-
-  if png_file =~ /UFEFF-.*\.png/
-
-    next # The PDF shouldn't be in that directory...
-
-  elsif png_file =~ /U2580-002\.png/
-
-    # Fix this one...
-
-    last_in_each_cell_x  = [ 2247, 2592 ]
-    last_in_each_cell_y  = [ 1244, 1684,   2124,   2564,   3004,   3444,   3884,   4324, 4764,   5204,   5644,   6084,   6524,   6964,   7404,   7837 ]
-    first_in_each_cell_x = [ 1908, 2252 ]
-    first_in_each_cell_y = [ 816,  1249,   1689,   2129,   2569,   3009,   3449,   3889, 4329,   4769,   5209,   5649,   6089,   6529,   6969,   7409 ]
-
-  elsif png_file =~ /UFFF0-002\.png/
-
-    last_in_each_cell_x = [ 2414 ]
-    last_in_each_cell_y = [ 5204,   5644,   6084,   6524,   6964 ]
-    first_in_each_cell_x = [ 2085 ]
-    first_in_each_cell_y = [ 4769,   5209,   5649,   6089,   6529 ]
-
-  elsif png_file =~ /UFB50-004\.png/
-
-    last_in_each_cell_x  = [ 1387,   1739,   2090,   2442,   2794,   3146,   3497,   3849,   4200,   4552,   4904,   5952 ]
-    last_in_each_cell_y  = [ 1244,   1684,   2124,   2564,   3004,   3444,   3884,   4324,   4764,   5204,   5644,   6084,   6524,   6964,   7404,   7837 ]
-    first_in_each_cell_x = [ 1041,   1392,   1744,   2095,   2447,   2799,   3151,   3502,   3854,   4205,   4557,   5612 ]
-    first_in_each_cell_y = [ 816,    1249,   1689,   2129,   2569,   3009,   3449,   3889,   4329,   4769,   5209,   5649,   6089,   6529,   6969,   7409 ]
-
-  else
-
-    grid_results_lines = `#{helpers}/find-grid #{png_file} 333 427`.split("\n")
-    unless $?.success?
-      puts "#{helpers}/find-grid #{png_file} 333 427 failed"
-      exit(-1)
-    end
-
-    grid_results_lines.each do |line|
-      line.chomp!
-      values = line.gsub(/^(.*): *()/,'\2').split(/ +/)
-      name = line.gsub(/^ *(.*):.*$/,'\1')
-      case name
-      when 'last_in_each_cell_x'
-        last_in_each_cell_x = values
-      when 'last_in_each_cell_y'
-        last_in_each_cell_y = values
-      when 'first_in_each_cell_x'
-        first_in_each_cell_x = values
-      when 'first_in_each_cell_y'
-        first_in_each_cell_y = values
+      if png_file =~ /U.*-001.png/
+        skipping = true
+      elsif some_done_done_from[png_file]
+        puts "Looks as if we've already split #{png_file}"
+        skipping = true
+      else
+        puts "Splitting characters out of each PNG file... "
+        puts " Considering: "+png_file
       end
-    end
+    }
 
-  end
+    unless skipping
 
-  cells_width = last_in_each_cell_x.length
-  cells_height = last_in_each_cell_y.length
+      png_output_template = "individual-characters/" + png_file.gsub(/\.png/,"-%08d.png")
 
-  if ((cells_width == 0) && (cells_height != 0)) || ((cells_width != 0) && (cells_height == 0))
-    STDERR.puts "Broken: divided #{png_file} into #{cells_width} by #{cells_height}"
-  end
+      last_in_each_cell_y = nil
+      first_in_each_cell_y = nil
 
-  if ((cells_width == 0) || (cells_height == 0))
-    system "touch individual-characters/#{png_file}.empty"
-    next
-  end
+      last_in_each_cell_x = nil
+      first_in_each_cell_x = nil
 
-  puts "  Cropping from #{png_file}"
+      skip_splitting = false
 
-  p = IO.popen( "#{helpers}/crop-images #{png_file}", "w" )
+      # The find-grid program gets certain code pages wrong, and one of
+      # the PDF files shouldn't be in there.
 
-  c_number = 0
+      if png_file =~ /UFEFF-.*\.png/
 
-  0.upto( cells_width - 1 ) do |cell_x|
-    0.upto( cells_height - 1 ) do |cell_y|
+        skip_splitting = true # The PDF shouldn't be in that directory...
 
-      right_x = Integer(last_in_each_cell_x[cell_x])
-      left_x = Integer(first_in_each_cell_x[cell_x])
-      top_y = Integer(first_in_each_cell_y[cell_y])
-      bottom_y = Integer(last_in_each_cell_y[cell_y])
+      elsif png_file =~ /U2580-002\.png/
 
-      output_filename = sprintf( png_output_template, c_number )
+        # Fix this one...
 
-      unless FileTest.exist?( output_filename )
+        last_in_each_cell_x  = [ 2247, 2592 ]
+        last_in_each_cell_y  = [ 1244, 1684,   2124,   2564,   3004,   3444,   3884,   4324, 4764,   5204,   5644,   6084,   6524,   6964,   7404,   7837 ]
+        first_in_each_cell_x = [ 1908, 2252 ]
+        first_in_each_cell_y = [ 816,  1249,   1689,   2129,   2569,   3009,   3449,   3889, 4329,   4769,   5209,   5649,   6089,   6529,   6969,   7409 ]
 
-        puts "    Cropping to: #{output_filename}"
+      elsif png_file =~ /UFFF0-002\.png/
 
-        p.puts( "#{output_filename} #{left_x} #{top_y} #{(right_x - left_x) + 1} #{(bottom_y - top_y) + 1}" )
-        p.flush
+        last_in_each_cell_x = [ 2414 ]
+        last_in_each_cell_y = [ 5204,   5644,   6084,   6524,   6964 ]
+        first_in_each_cell_x = [ 2085 ]
+        first_in_each_cell_y = [ 4769,   5209,   5649,   6089,   6529 ]
+
+      elsif png_file =~ /UFB50-004\.png/
+
+        last_in_each_cell_x  = [ 1387,   1739,   2090,   2442,   2794,   3146,   3497,   3849,   4200,   4552,   4904,   5952 ]
+        last_in_each_cell_y  = [ 1244,   1684,   2124,   2564,   3004,   3444,   3884,   4324,   4764,   5204,   5644,   6084,   6524,   6964,   7404,   7837 ]
+        first_in_each_cell_x = [ 1041,   1392,   1744,   2095,   2447,   2799,   3151,   3502,   3854,   4205,   4557,   5612 ]
+        first_in_each_cell_y = [ 816,    1249,   1689,   2129,   2569,   3009,   3449,   3889,   4329,   4769,   5209,   5649,   6089,   6529,   6969,   7409 ]
+
+      else
+
+        grid_results_lines = `#{helpers}/find-grid #{png_file} 333 427`.split("\n")
+        unless $?.success?
+          puts "#{helpers}/find-grid #{png_file} 333 427 failed"
+          exit(-1)
+        end
+
+        grid_results_lines.each do |line|
+          line.chomp!
+          values = line.gsub(/^(.*): *()/,'\2').split(/ +/)
+          name = line.gsub(/^ *(.*):.*$/,'\1')
+          case name
+          when 'last_in_each_cell_x'
+            last_in_each_cell_x = values
+          when 'last_in_each_cell_y'
+            last_in_each_cell_y = values
+          when 'first_in_each_cell_x'
+            first_in_each_cell_x = values
+          when 'first_in_each_cell_y'
+            first_in_each_cell_y = values
+          end
+        end
 
       end
 
-      c_number += 1
+      unless skip_splitting
+
+        cells_width = last_in_each_cell_x.length
+        cells_height = last_in_each_cell_y.length
+
+        if ((cells_width == 0) && (cells_height != 0)) || ((cells_width != 0) && (cells_height == 0))
+          STDERR.puts "Broken: divided #{png_file} into #{cells_width} by #{cells_height}"
+        end
+
+        if ((cells_width == 0) || (cells_height == 0))
+          system "touch individual-characters/#{png_file}.empty"
+        else
+
+          puts "  Cropping from #{png_file}"
+
+          p = IO.popen( "#{helpers}/crop-images #{png_file}", "w" )
+
+          c_number = 0
+
+          0.upto( cells_width - 1 ) do |cell_x|
+            0.upto( cells_height - 1 ) do |cell_y|
+
+              right_x = Integer(last_in_each_cell_x[cell_x])
+              left_x = Integer(first_in_each_cell_x[cell_x])
+              top_y = Integer(first_in_each_cell_y[cell_y])
+              bottom_y = Integer(last_in_each_cell_y[cell_y])
+
+              output_filename = sprintf( png_output_template, c_number )
+
+              unless FileTest.exist?( output_filename )
+
+                puts "    Cropping to: #{output_filename}"
+
+                p.puts( "#{output_filename} #{left_x} #{top_y} #{(right_x - left_x) + 1} #{(bottom_y - top_y) + 1}" )
+                p.flush
+
+              end
+
+              c_number += 1
+
+            end
+          end
+
+          p.close
+
+          unless $?.success?
+            puts "crop-images failed"
+            exit(-1)
+          end
+        end
+
+      end
 
     end
-  end
 
-  p.close
-
-  unless $?.success?
-    puts "crop-images failed"
-    exit(-1)
-  end
+    mutex.synchronize {
+      running_threads -= 1
+      condition.signal if running_threads < max_threads
+    }
+  }
 
 end
+
+threads.each {|t| t.join}
 
 def compare_tile_filenames( a, b )
   Integer( a.gsub( /^.*U([0-9A-F]+)\-([0-9A-F]+)\-([0-9A-F]+).*\.png$/, '0x\1\2\3' ) ) <=>
