@@ -202,11 +202,7 @@ png_files.each do |png_file|
       # The find-grid program gets certain code pages wrong, and one of
       # the PDF files shouldn't be in there.
 
-      if png_file =~ /UFEFF-.*\.png/
-
-        skip_splitting = true # The PDF shouldn't be in that directory...
-
-      elsif png_file =~ /U2580-002\.png/
+      if png_file =~ /U2580-002\.png/
 
         # Fix this one...
 
