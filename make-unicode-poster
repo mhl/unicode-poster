@@ -14,7 +14,7 @@ unless system("cd #{helpers} && make")
   exit(-1)
 end
 
-charts_index_page = "http://www.unicode.org/charts/PDF/"
+charts_index_page = "http://www.unicode.org/charts/PDF/Unicode-5.1/"
 
 index_html = `curl -s #{charts_index_page}`
 unless $?.success?
@@ -24,7 +24,7 @@ end
 
 pdf_names = Array.new
 
-pdf_re = Regexp.new( '(U([0-9A-F]+)\.pdf)' )
+pdf_re = Regexp.new( '(U([0-9]+-)?([0-9A-F]+)\.pdf)' )
 
 index_html.scan( pdf_re ) { |m| pdf_names.push( m[0] ) }
 
@@ -35,16 +35,28 @@ pdf_names.sort! { |a,b|
   b =~ pdf_re; b_hex_string = $2
 	a_hex_string.hex <=> b_hex_string.hex
 }
+ideal_pdf_names = []
 
 pdf_names.each do |p|
   puts "Downloading: #{p}"
-  unless FileTest.exist?( p )
+  p =~ pdf_re
+  ideal_name = "U" + $3 + ".pdf"
+  unless FileTest.exist?( ideal_name )
     unless system( "curl", "-q", charts_index_page + p, "-o", p )
       puts "Failed to download: #{p}"
       exit( -1 )
     end
+    if ideal_name != p
+      unless system("mv",p,ideal_name)
+        puts "Failed to rename #{p} to #{ideal_name}"
+        exit( -1 )
+      end
+    end
   end
+  ideal_pdf_names.push ideal_name
 end
+
+pdf_names = ideal_pdf_names
 
 pdfs_to_skip = Hash.new
 
@@ -134,6 +146,7 @@ threads.each {|t| t.join}
 puts "Globbing directory..."
 
 png_files = Dir['U*-*.png']
+png_files = png_files.sort_by(&png_compare)
 
 some_done_done_from = Hash.new
 already_output_files = Dir['individual-characters/U*-*-*.png']
