@@ -2,6 +2,7 @@
 
 require 'tileinfo.rb'
 require 'thread'
+require 'tempfile'
 
 include Java
 
@@ -256,40 +257,27 @@ png_files.each do |png_file|
 
           puts "  Cropping from #{png_file}"
 
-          p = IO.popen( "#{helpers}/crop-images #{png_file}", "w" )
+        crop_specification_filename = png_file + ".crop"
+        open(crop_specification_filename,"w") do |f|
 
           c_number = 0
-
           0.upto( cells_width - 1 ) do |cell_x|
             0.upto( cells_height - 1 ) do |cell_y|
-
               right_x = Integer(last_in_each_cell_x[cell_x])
               left_x = Integer(first_in_each_cell_x[cell_x])
               top_y = Integer(first_in_each_cell_y[cell_y])
               bottom_y = Integer(last_in_each_cell_y[cell_y])
-
               output_filename = sprintf( png_output_template, c_number )
-
               unless FileTest.exist?( output_filename )
-
-                puts "    Cropping to: #{output_filename}"
-
-                p.puts( "#{output_filename} #{left_x} #{top_y} #{(right_x - left_x) + 1} #{(bottom_y - top_y) + 1}" )
-                p.flush
-
+                f.puts( "#{output_filename} #{left_x} #{top_y} #{(right_x - left_x) + 1} #{(bottom_y - top_y) + 1}" )
               end
-
               c_number += 1
-
             end
           end
 
-          p.close
-
-          unless $?.success?
-            puts "crop-images failed"
-            exit(-1)
-          end
+        if not system("#{helpers}/crop-images",png_file,crop_specification_filename)
+          puts "#{helpers}/crop-image #{png_file} #{crop_specification_filename} failed"
+          exit(-1)
         end
 
       end
@@ -367,14 +355,13 @@ open( "top-sizes.yaml", "w" ) do |o_top_sizes|
 
         text_starts_at = height - guessed_text_size
 
-        p = IO.popen( "#{helpers}/crop-images #{fname}", "w" )
+        t = Tempfile.new('unicode-tile')
+        t.puts( "#{top_part_fname} 0 0 #{width} #{text_starts_at}" )
+        t.puts( "#{bottom_part_fname} 0 #{text_starts_at} #{width} #{guessed_text_size}" )
+        t.close()
 
-        p.puts( "#{top_part_fname} 0 0 #{width} #{text_starts_at}" )
-        p.puts( "#{bottom_part_fname} 0 #{text_starts_at} #{width} #{guessed_text_size}" )
-
-        p.close
-        unless $?.success?
-          puts "#{helpers}/crop-images #{fname} failed."
+        if not system("#{helpers}/crop-images",fname,t.path)
+          puts "#{helpers}/crop-image #{fname} #{t} failed"
           exit(-1)
         end
 

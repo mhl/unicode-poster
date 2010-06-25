@@ -26,6 +26,7 @@ int main( int argc, char **argv ) {
     target targets[512];
     int number_of_targets = 0;
     char * filename = NULL;
+    char * crop_specification_filename = NULL;
     FILE * infile;
     char line_buffer[512];
 
@@ -36,14 +37,21 @@ int main( int argc, char **argv ) {
 
     int i;
 
-    if( argc != 2 ) {
-        printf("Usage: crop-images <input-png-file-name>\n");
+    if( argc != 3 ) {
+        printf("Usage: crop-images <input-png-file-name> <crop-specification>\n");
         return -1;
     }
     
     filename = argv[1];
+    crop_specification_filename = argv[2];
+
+    FILE * specification_file = fopen(crop_specification_filename,"r");
+    if( ! specification_file ) {
+            fprintf(stderr,"Failed to allocate 512 bytes.\n");
+            return -1;
+    }
     
-    while( fgets(line_buffer,511,stdin) ) {
+    while( fgets(line_buffer,511,specification_file) ) {
 
         targets[number_of_targets].output_filename = malloc(512);
         if( ! targets[number_of_targets].output_filename ) {
@@ -73,6 +81,10 @@ int main( int argc, char **argv ) {
         */
 
         ++ number_of_targets;
+    }
+    if(fclose(specification_file)) {
+        fprintf(stderr, PROGNAME ": failed to close specification file [%s]\n", crop_specification_filename);
+        return -1;
     }
 
     infile = fopen(filename, "rb");
