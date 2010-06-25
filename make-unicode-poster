@@ -249,19 +249,18 @@ png_files.each do |png_file|
 
       end
 
+      cells_width = last_in_each_cell_x.length
+      cells_height = last_in_each_cell_y.length
 
-        cells_width = last_in_each_cell_x.length
-        cells_height = last_in_each_cell_y.length
+      if ((cells_width == 0) && (cells_height != 0)) || ((cells_width != 0) && (cells_height == 0))
+        STDERR.puts "Broken: divided #{png_file} into #{cells_width} by #{cells_height}"
+      end
 
-        if ((cells_width == 0) && (cells_height != 0)) || ((cells_width != 0) && (cells_height == 0))
-          STDERR.puts "Broken: divided #{png_file} into #{cells_width} by #{cells_height}"
-        end
+      if ((cells_width == 0) || (cells_height == 0))
+        system "touch individual-characters/#{png_file}.empty"
+      else
 
-        if ((cells_width == 0) || (cells_height == 0))
-          system "touch individual-characters/#{png_file}.empty"
-        else
-
-          puts "  Cropping from #{png_file}"
+        puts "  Cropping from #{png_file}"
 
         crop_specification_filename = png_file + ".crop"
         open(crop_specification_filename,"w") do |f|
