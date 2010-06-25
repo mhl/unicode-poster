@@ -418,7 +418,7 @@ open( "top-sizes.yaml", "w" ) do |o_top_sizes|
         # Now use OCR to try to parse the codepoint out of the bottom
         # part:
 
-        result = `pngtopnm #{bottom_part_fname} | ocrad -`
+        result = `/home/mark/netpbm-10.35.75/converter/other/pngtopnm #{bottom_part_fname} | ocrad -`
         unless $?.success?
           puts "png-topnm #{bottom_part_fname} | ocrad - failed."
           exit(-1)
