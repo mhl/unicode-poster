@@ -28,13 +28,13 @@ pdf_re = Regexp.new( '(U([0-9]+-)?([0-9A-F]+)\.pdf)' )
 
 index_html.scan( pdf_re ) { |m| pdf_names.push( m[0] ) }
 
+pdf_compare = lambda { |a| a =~ pdf_re; $3 }
+png_compare = lambda { |a| a =~ /U([0-9A-F]+)-([0-9])+/; n = $1.to_i(16) * 1000 + $2.to_i(10); n }
+
 pdf_names.sort!.uniq!
 
-pdf_names.sort! { |a,b|
-	a =~ pdf_re; a_hex_string = $2
-  b =~ pdf_re; b_hex_string = $2
-	a_hex_string.hex <=> b_hex_string.hex
-}
+pdf_names = pdf_names.sort_by(&pdf_compare)
+
 ideal_pdf_names = []
 
 pdf_names.each do |p|
