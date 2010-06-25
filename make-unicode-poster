@@ -368,7 +368,7 @@ open( "top-sizes.yaml", "w" ) do |o_top_sizes|
         top_width = nil
         top_height = nil
 
-        output = safe_backticks("#{helpers}/empty-image",top_part_fname)
+        output = `#{helpers}/empty-image #{top_part_fname}`
         if $?.success?
           puts "Empty, skipping: #{fname}"
           system("rm",top_part_fname)
@@ -385,7 +385,7 @@ open( "top-sizes.yaml", "w" ) do |o_top_sizes|
         # Check that the bottom part isn't hashed out, and delete
         # it if so:
 
-        output = safe_backticks("#{helpers}/bottom-line-proportion",bottom_part_fname)
+        output = `#{helpers}/bottom-line-proportion #{bottom_part_fname}`
         proportion = Float(output)
         if proportion > 0.01
           puts "Probably cross-hatched, skipping: #{fname}"

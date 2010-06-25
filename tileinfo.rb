@@ -5,28 +5,6 @@ unless FileTest.exists? 'Blocks.txt'
   end
 end
 
-def safe_backticks( *command )
-
-  result = ""
-
-  Kernel.open( "|-", "r" ) do |f|
-    if f
-      f.each_line do |line|
-        result += line
-      end
-    else
-      begin
-        exec( *command )
-      rescue
-        raise "Couldn't exec #{command}: #{$!}\n"
-      end
-    end
-  end
-
-  result
-
-end
-
 class Integer
   def between_inclusive?( min, max )
     (self >= min) && (self <= max)
