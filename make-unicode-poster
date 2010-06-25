@@ -197,8 +197,6 @@ png_files.each do |png_file|
       last_in_each_cell_x = nil
       first_in_each_cell_x = nil
 
-      skip_splitting = false
-
       # The find-grid program gets certain code pages wrong, and one of
       # the PDF files shouldn't be in there.
 
@@ -251,7 +249,6 @@ png_files.each do |png_file|
 
       end
 
-      unless skip_splitting
 
         cells_width = last_in_each_cell_x.length
         cells_height = last_in_each_cell_y.length
@@ -283,6 +280,7 @@ png_files.each do |png_file|
               c_number += 1
             end
           end
+        end
 
         if not system("#{helpers}/crop-images",png_file,crop_specification_filename)
           puts "#{helpers}/crop-image #{png_file} #{crop_specification_filename} failed"
