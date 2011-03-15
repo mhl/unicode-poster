@@ -47,8 +47,8 @@ int main( int argc, char **argv ) {
 
     FILE * specification_file = fopen(crop_specification_filename,"r");
     if( ! specification_file ) {
-            fprintf(stderr,"Failed to allocate 512 bytes.\n");
-            return -1;
+        fprintf(stderr,"Failed to open %s.\n",crop_specification_filename);
+        return -1;
     }
     
     while( fgets(line_buffer,511,specification_file) ) {
