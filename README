@@ -13,9 +13,12 @@ These scripts require the following binaries:
    libpng12-dev
    libgd-ruby1.8
 
+Make sure that you have the font DejaVu installed as well:
+  ttf-dejavu-core
+
 You can install all of these dependencies with:
 
-  apt-get install jruby ruby1.8 ruby curl poppler-utils make ocrad imagemagick libpng12-dev libgd-ruby1.8
+  apt-get install jruby ruby1.8 ruby curl poppler-utils make ocrad imagemagick libpng12-dev libgd-ruby1.8 ttf-dejavu-core
 
 For composing the poster strips you will need the upstream
 version of netpbm of at least version 10.34, which you can get
