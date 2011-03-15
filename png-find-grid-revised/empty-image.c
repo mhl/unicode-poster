@@ -85,6 +85,7 @@ int main( int argc, char **argv ) {
             }
         }
     }
+    printf("Empty\n");
     readpng_cleanup(TRUE);
     fclose(infile);    
 

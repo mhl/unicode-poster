@@ -40,10 +40,12 @@ end
 
 puts "paper_height_in_inches_* #{paper_width_in_inches} x #{paper_height_in_inches}"
 
-pnmtops = "/home/mark/netpbm-10.34/package/bin/pnmtops"
-pamscale = "/home/mark/netpbm-10.34/package/bin/pamscale"
-pnmtopng = "/home/mark/netpbm-10.34/package/bin/pnmtopng"
-pgmtoppm = "/home/mark/netpbm-10.34/package/bin/pgmtoppm"
+netpbm_build_tree = "/home/mark/netpbm-10.35.75/"
+
+pnmtops = "#{netpbm_build_tree}converter/other/pnmtops"
+pamscale = "#{netpbm_build_tree}editor/pamscale"
+pnmtopng = "#{netpbm_build_tree}converter/other/pnmtopng"
+pgmtoppm = "#{netpbm_build_tree}converter/other/pgmtoppm"
 
 # pnmtops = "pnmtops"
 # pamscale = "pnmscale"
@@ -144,7 +146,7 @@ pnm_files.each do |pnmfile|
       system command
     end
     
-    command = "#{pnmtops} -imageheight #{final_height_in_inches} -psfilter -rle #{pnmfile_reduce} > #{epsfile}"
+    command = "#{pnmtops} -imageheight #{final_height_in_inches} #{pnmfile_reduce} > #{epsfile}"
     puts "  Generating EPS file: #{command}"
     system command
     
@@ -184,7 +186,7 @@ pnm_files.each do |pnmfile|
       system command
     end
     
-    command = "#{pnmtops} -imageheight #{final_height_in_inches} -psfilter -rle #{pnmfile_reduce} > #{epsfile}"
+    command = "#{pnmtops} -imageheight #{final_height_in_inches} #{pnmfile_reduce} > #{epsfile}"
     puts "  Generating EPS file: #{command}"
     system command
     

@@ -6,233 +6,137 @@ require 'tempfile'
 
 include Java
 
-# The directory with the helper files:
-helpers = "png-find-grid-revised"
+def jruby_safe_backticks(command,output_expected=false)
+  # This is horrible, but for some reason IO.popen (like backticks)
+  # sometimes still fails with an IOError, so retry up to three times.
+  # See my bug report here:
+  #   http://jira.codehaus.org/browse/JRUBY-4909
+  attempts = 0
+  while attempts < 3
+    begin
+      io = IO.popen(command)
+      data = io.read
+      io.close
+      unless output_expected and (data.length == 0)
+        return data
+      end
+    rescue IOError => e
+      STDERR.puts "IOError (#{e.to_s}) running #{command}"
+    end
+    attempts += 1
+  end
+  STDERR.puts "Still failed after #{attempts} attempts: #{command}"
+  return ""
+end
 
-unless system("cd #{helpers} && make")
+# The directory with the helper files:
+$helpers = "png-find-grid-revised"
+
+unless system("cd #{$helpers} && make")
   puts "Failed to build the helper programs.  Is libpng12-dev installed?"
   exit(-1)
 end
 
-charts_index_page = "http://www.unicode.org/charts/PDF/Unicode-5.1/"
+pdf_name = 'CodeCharts.pdf'
+pdf_url = "http://www.unicode.org/Public/5.1.0/charts/CodeCharts.pdf"
 
-index_html = `curl -s #{charts_index_page}`
-unless $?.success?
-  puts "Couldn't fetch the charts index page from: #{charts_index_page}"
-  exit(-1)
+last_png_file = 'U-849.png'
+
+unless FileTest.exist?(pdf_name)
+  system("curl","-q","-o",pdf_name,pdf_url)
 end
 
-pdf_names = Array.new
-
-pdf_re = Regexp.new( '(U([0-9]+-)?([0-9A-F]+)\.pdf)' )
-
-index_html.scan( pdf_re ) { |m| pdf_names.push( m[0] ) }
-
-pdf_compare = lambda { |a| a =~ pdf_re; $3 }
-png_compare = lambda { |a| a =~ /U([0-9A-F]+)-([0-9])+/; n = $1.to_i(16) * 1000 + $2.to_i(10); n }
-
-pdf_names.sort!.uniq!
-
-pdf_names = pdf_names.sort_by(&pdf_compare)
-
-ideal_pdf_names = []
-
-pdf_names.each do |p|
-  puts "Downloading: #{p}"
-  p =~ pdf_re
-  ideal_name = "U" + $3 + ".pdf"
-  unless FileTest.exist?( ideal_name )
-    unless system( "curl", "-q", charts_index_page + p, "-o", p )
-      puts "Failed to download: #{p}"
-      exit( -1 )
-    end
-    if ideal_name != p
-      unless system("mv",p,ideal_name)
-        puts "Failed to rename #{p} to #{ideal_name}"
-        exit( -1 )
-      end
-    end
+unless FileTest.exist?(last_png_file)
+  unless system( "pdftoppm",
+                 "-r", "800",
+                 "-png",
+                 pdf_name,
+                 "U")
+    puts "Failed to convert #{pdf_name} to a series of PNG files"
+    exit(-1)
   end
-  ideal_pdf_names.push ideal_name
 end
-
-pdf_names = ideal_pdf_names
-
-pdfs_to_skip = Hash.new
-
-pdfs_to_skip['UD800.pdf'] = "High Surrogate Area"
-pdfs_to_skip['UDC00.pdf'] = "Low Surrogate Area"
-pdfs_to_skip['UE000.pdf'] = "Private Use Area"
-pdfs_to_skip['UF0000.pdf'] = "Supplementary Private Use Area-A"
-pdfs_to_skip['U100000.pdf'] = "Supplementary Private Use Area-B"
-
-threads = []
-max_threads = java.lang.Runtime.getRuntime.availableProcessors
-mutex = Mutex.new
-condition = ConditionVariable.new
-running_threads = 0
-
-pdf_names.each do |p|
-
-  png_template = p.gsub( /.pdf$/, '-%03d.png' )
-  png_root = p.gsub( /.pdf$/, '' )
-
-  second_png_name = p.gsub( /\.pdf/, '-002.png' )
-
-  skipping = true
-
-  threads << Thread.new {
-
-    mutex.synchronize {
-      condition.wait(mutex) while running_threads >= max_threads
-      running_threads += 1
-      condition.signal if running_threads < max_threads
-
-      # I'm just keeping this in the mutex so that the printed output
-      # doesn't look ugly :)
-
-      if FileTest.exist?( second_png_name )
-        puts "#{p} has probably already been converted"
-      elsif pdfs_to_skip[p]
-        puts "We're supposed to skip #{p}"
-      else
-        puts "Converting #{p} to #{png_template}"
-        skipping = false
-      end
-
-    }
-
-    unless skipping
-
-      unless system( "pdftoppm",
-                     "-r", "800",
-                     "-png",
-                     p,
-                     png_root)
-        puts "Failed to convert #{p} to a series of PNG files"
-        exit(-1)
-      end
-
-      # Annoyingly, pdftoppm doesn't have an option to format the page
-      # number to a fixed width, so rename the files we've just
-      # generated:
-
-      Dir[png_root+'*'+'.png'].sort.each do |o|
-        if o =~ /([0-9]+)\.png/
-          n = $1.to_i
-          new_name = sprintf(png_template,n)
-          next if o == new_name
-          unless system( "mv", o, new_name )
-            puts "Failed to rename PNG file from #{o} to #{new_name}"
-            exit(-1)
-          end
-        else
-          puts "Found a PNG file that didn't match: #{o}"
-          exit(-1)
-        end
-      end
-    end
-
-    mutex.synchronize {
-      running_threads -= 1
-      condition.signal if running_threads < max_threads
-    }
-  }
-
-end
-
-threads.each {|t| t.join}
 
 puts "Globbing directory..."
 
-png_files = Dir['U*-*.png']
+png_compare = lambda { |a| a =~ /U-([0-9]+)\.png/; $1.to_i(10) }
+
+png_files = Dir['U-*.png']
 png_files = png_files.sort_by(&png_compare)
 
-some_done_done_from = Hash.new
-already_output_files = Dir['individual-characters/U*-*-*.png']
-already_output_files.each do |already_done|
-  if already_done =~ /(U[0-9A-F]+-[0-9A-F]+)/
-    some_done_done_from[$1+".png"] = true
-  end
-end
-pngs_with_no_grid = Dir['individual-characters/U*-*.png.empty']
-pngs_with_no_grid.each do |already_done|
-  if already_done =~ /(U[0-9A-F]+-[0-9A-F]+)/
-    some_done_done_from[$1+".png"] = true
-  end
+$pngs_empty = {}
+
+Dir['U-*.png.empty'].each do |already_done|
+  $pngs_empty[already_done] = true
 end
 
-threads = []
-running_threads = 0
+def find_grid_and_crop(png_file)
 
-png_files.each do |png_file|
+  png_output_template = "individual-characters/" + png_file.gsub(/\.png/,"-%08d.png")
 
-  threads << Thread.new {
+  skipping = false
 
-    skipping = false
+  $mutex.synchronize {
+    $condition.wait($mutex) while $running_threads >= $max_threads
+    $running_threads += 1
+    $condition.signal if $running_threads < $max_threads
 
-    mutex.synchronize {
-      condition.wait(mutex) while running_threads >= max_threads
-      running_threads += 1
-      condition.signal if running_threads < max_threads
+    if $pngs_empty[png_file+".empty"]
+      puts "Looks as if we've previously found #{png_file} to be empty; skipping..."
+      skipping = true
+    elsif FileTest.exist? sprintf(png_output_template,0)
+      puts "At least one output file from "+png_file+"; skipping..."
+      skipping = true
+    else
+      puts "Splitting: "+png_file
+    end
+  }
 
-      if png_file =~ /U.*-001.png/
-        skipping = true
-      elsif some_done_done_from[png_file]
-        puts "Looks as if we've already split #{png_file}"
-        skipping = true
-      else
-        puts "Splitting characters out of each PNG file... "
-        puts " Considering: "+png_file
-      end
-    }
+  unless skipping
 
-    unless skipping
+    last_in_each_cell_y = nil
+    first_in_each_cell_y = nil
 
-      png_output_template = "individual-characters/" + png_file.gsub(/\.png/,"-%08d.png")
+    last_in_each_cell_x = nil
+    first_in_each_cell_x = nil
 
-      last_in_each_cell_y = nil
-      first_in_each_cell_y = nil
+    # The find-grid program gets certain code pages wrong, and one of
+    # the PDF files shouldn't be in there.
 
-      last_in_each_cell_x = nil
-      first_in_each_cell_x = nil
+    #      if png_file =~ /U2580-002\.png/
+    #
+    #        # Fix this one...
+    #
+    #        last_in_each_cell_x  = [ 2247, 2592 ]
+    #        last_in_each_cell_y  = [ 1244, 1684,   2124,   2564,   3004,   3444,   3884,   4324, 4764,   5204,   5644,   6084,   6524,   6964,   7404,   7837 ]
+    #        first_in_each_cell_x = [ 1908, 2252 ]
+    #        first_in_each_cell_y = [ 816,  1249,   1689,   2129,   2569,   3009,   3449,   3889, 4329,   4769,   5209,   5649,   6089,   6529,   6969,   7409 ]
+    #
+    #      elsif png_file =~ /UFFF0-002\.png/
+    #
+    #        last_in_each_cell_x = [ 2414 ]
+    #        last_in_each_cell_y = [ 5204,   5644,   6084,   6524,   6964 ]
+    #        first_in_each_cell_x = [ 2085 ]
+    #        first_in_each_cell_y = [ 4769,   5209,   5649,   6089,   6529 ]
+    #
+    #      elsif png_file =~ /UFB50-004\.png/
+    #
+    #        last_in_each_cell_x  = [ 1387,   1739,   2090,   2442,   2794,   3146,   3497,   3849,   4200,   4552,   4904,   5952 ]
+    #        last_in_each_cell_y  = [ 1244,   1684,   2124,   2564,   3004,   3444,   3884,   4324,   4764,   5204,   5644,   6084,   6524,   6964,   7404,   7837 ]
+    #        first_in_each_cell_x = [ 1041,   1392,   1744,   2095,   2447,   2799,   3151,   3502,   3854,   4205,   4557,   5612 ]
+    #        first_in_each_cell_y = [ 816,    1249,   1689,   2129,   2569,   3009,   3449,   3889,   4329,   4769,   5209,   5649,   6089,   6529,   6969,   7409 ]
 
-      # The find-grid program gets certain code pages wrong, and one of
-      # the PDF files shouldn't be in there.
+    if false
 
-      if png_file =~ /U2580-002\.png/
+    else
 
-        # Fix this one...
-
-        last_in_each_cell_x  = [ 2247, 2592 ]
-        last_in_each_cell_y  = [ 1244, 1684,   2124,   2564,   3004,   3444,   3884,   4324, 4764,   5204,   5644,   6084,   6524,   6964,   7404,   7837 ]
-        first_in_each_cell_x = [ 1908, 2252 ]
-        first_in_each_cell_y = [ 816,  1249,   1689,   2129,   2569,   3009,   3449,   3889, 4329,   4769,   5209,   5649,   6089,   6529,   6969,   7409 ]
-
-      elsif png_file =~ /UFFF0-002\.png/
-
-        last_in_each_cell_x = [ 2414 ]
-        last_in_each_cell_y = [ 5204,   5644,   6084,   6524,   6964 ]
-        first_in_each_cell_x = [ 2085 ]
-        first_in_each_cell_y = [ 4769,   5209,   5649,   6089,   6529 ]
-
-      elsif png_file =~ /UFB50-004\.png/
-
-        last_in_each_cell_x  = [ 1387,   1739,   2090,   2442,   2794,   3146,   3497,   3849,   4200,   4552,   4904,   5952 ]
-        last_in_each_cell_y  = [ 1244,   1684,   2124,   2564,   3004,   3444,   3884,   4324,   4764,   5204,   5644,   6084,   6524,   6964,   7404,   7837 ]
-        first_in_each_cell_x = [ 1041,   1392,   1744,   2095,   2447,   2799,   3151,   3502,   3854,   4205,   4557,   5612 ]
-        first_in_each_cell_y = [ 816,    1249,   1689,   2129,   2569,   3009,   3449,   3889,   4329,   4769,   5209,   5649,   6089,   6529,   6969,   7409 ]
-
-      else
-
-        grid_results_lines = `#{helpers}/find-grid #{png_file} 333 427`.split("\n")
-        unless $?.success?
-          puts "#{helpers}/find-grid #{png_file} 333 427 failed"
-          exit(-1)
-        end
-
+      command = "#{$helpers}/find-grid #{png_file} 333 427"
+      grid_results_output = jruby_safe_backticks(command,output_expected=true)
+      if grid_results_output.length > 1
+        grid_results_lines = grid_results_output.split("\n")
         grid_results_lines.each do |line|
           line.chomp!
+          next if line =~ /image height is/
           values = line.gsub(/^(.*): *()/,'\2').split(/ +/)
           name = line.gsub(/^ *(.*):.*$/,'\1')
           case name
@@ -244,68 +148,96 @@ png_files.each do |png_file|
             first_in_each_cell_x = values
           when 'first_in_each_cell_y'
             first_in_each_cell_y = values
+          else
+            STDERR.puts "Unparseable line from command '#{command}': #{line}"
+            exit(-1)
           end
         end
-
-      end
-
-      cells_width = last_in_each_cell_x.length
-      cells_height = last_in_each_cell_y.length
-
-      if ((cells_width == 0) && (cells_height != 0)) || ((cells_width != 0) && (cells_height == 0))
-        STDERR.puts "Broken: divided #{png_file} into #{cells_width} by #{cells_height}"
-      end
-
-      if ((cells_width == 0) || (cells_height == 0))
-        system "touch individual-characters/#{png_file}.empty"
       else
-
-        puts "  Cropping from #{png_file}"
-
-        crop_specification_filename = png_file + ".crop"
-        open(crop_specification_filename,"w") do |f|
-
-          c_number = 0
-          0.upto( cells_width - 1 ) do |cell_x|
-            0.upto( cells_height - 1 ) do |cell_y|
-              right_x = Integer(last_in_each_cell_x[cell_x])
-              left_x = Integer(first_in_each_cell_x[cell_x])
-              top_y = Integer(first_in_each_cell_y[cell_y])
-              bottom_y = Integer(last_in_each_cell_y[cell_y])
-              output_filename = sprintf( png_output_template, c_number )
-              unless FileTest.exist?( output_filename )
-                f.puts( "#{output_filename} #{left_x} #{top_y} #{(right_x - left_x) + 1} #{(bottom_y - top_y) + 1}" )
-              end
-              c_number += 1
-            end
-          end
-        end
-
-        if not system("#{helpers}/crop-images",png_file,crop_specification_filename)
-          puts "#{helpers}/crop-image #{png_file} #{crop_specification_filename} failed"
-          exit(-1)
-        end
-
+        STDERR.puts "'#{command}' failed"
+        exit(-1)
       end
 
     end
 
-    mutex.synchronize {
-      running_threads -= 1
-      condition.signal if running_threads < max_threads
+    cells_width = last_in_each_cell_x.length
+    cells_height = last_in_each_cell_y.length
+
+    if ((cells_width == 0) && (cells_height != 0)) || ((cells_width != 0) && (cells_height == 0))
+      message = "Broken: divided #{png_file} into #{cells_width} by #{cells_height}"
+      STDERR.puts message
+    end
+
+    if ((cells_width == 0) || (cells_height == 0))
+      system "touch #{png_file}.empty"
+    else
+
+      puts "  Cropping from #{png_file}"
+
+      crop_specification_filename = png_file + ".crop"
+      open(crop_specification_filename,"w") do |f|
+
+        c_number = 0
+        0.upto( cells_width - 1 ) do |cell_x|
+          0.upto( cells_height - 1 ) do |cell_y|
+            right_x = Integer(last_in_each_cell_x[cell_x])
+            left_x = Integer(first_in_each_cell_x[cell_x])
+            top_y = Integer(first_in_each_cell_y[cell_y])
+            bottom_y = Integer(last_in_each_cell_y[cell_y])
+            output_filename = sprintf( png_output_template, c_number )
+            unless FileTest.exist?( output_filename )
+              f.puts( "#{output_filename} #{left_x} #{top_y} #{(right_x - left_x) + 1} #{(bottom_y - top_y) + 1}" )
+            end
+            c_number += 1
+          end
+        end
+      end
+
+      if not system("#{$helpers}/crop-images",png_file,crop_specification_filename)
+        puts "#{$helpers}/crop-image #{png_file} #{crop_specification_filename} failed"
+        exit(-1)
+      end
+
+    end
+  end
+end
+
+$max_threads = java.lang.Runtime.getRuntime.availableProcessors
+$mutex = Mutex.new
+$condition = ConditionVariable.new
+$threads = []
+$running_threads = 0
+
+unless FileTest.exist?( 'individual-characters/U-841-00000239.png' )
+
+  png_files.each do |png_file|
+
+    puts "Looking at png_file: #{png_file}"
+
+    $threads << Thread.new( png_file ) { |file_to_split|
+
+      find_grid_and_crop(file_to_split)
+
+      $mutex.synchronize {
+        $running_threads -= 1
+        $condition.signal if $running_threads < $max_threads
+      }
     }
-  }
+
+  end
+
+  $threads.each {|t| t.join}
 
 end
 
-threads.each {|t| t.join}
+puts "Done with threads..."
 
-def compare_tile_filenames( a, b )
-  Integer( a.gsub( /^.*U([0-9A-F]+)\-([0-9A-F]+)\-([0-9A-F]+).*\.png$/, '0x\1\2\3' ) ) <=>
-    Integer( b.gsub( /^.*U([0-9A-F]+)\-([0-9A-F]+)\-([0-9A-F]+).*\.png$/, '0x\1\2\3' ) )
+
+def tile_compare(a)
+  a.gsub( /^.*U\-(\d+)\-(\d+)/, '\1\2' ).to_i(10)
 end
 
-files = Dir['individual-characters/U*-*-*.png']
+files = Dir['individual-characters/U-*-*.png']
 
 # If this is a repeat run then we may have some leftover -top and
 # -bottom files here:
@@ -313,126 +245,191 @@ files = Dir['individual-characters/U*-*-*.png']
 files.delete_if { |x| x =~ /top/ }
 files.delete_if { |x| x =~ /bottom/ }
 
-files.sort! { |a,b| compare_tile_filenames( a, b ) }
+files = files.sort_by { |a| tile_compare(a) }
+
+puts "Got files now..."
 
 # ------------------------------------------------------------------------
 
-last_block = -1
+def divide_and_ocr(character_filename)
 
-open( "top-sizes.yaml", "w" ) do |o_top_sizes|
+  character_filename =~ /U-([0-9A-F]+)-([0-9A-F]+)/
 
-  o_top_sizes.puts "---"
+  info = jruby_safe_backticks("#{$helpers}/png-size #{character_filename}",output_expected=true)
 
-  open( "codepoints.yaml", "w" ) do |o_codepoints|
+  width = nil
+  height = nil
 
-    files.each do |fname|
+  info.chomp!
+  if info =~ /(\d+)x(\d+)/
 
-      fname =~ /U([0-9A-F]+)-([0-9A-F]+)/
+    width = Integer($1)
+    height = Integer($2)
 
-      block = Integer("0x"+$1)
+    top_part_fname = character_filename.sub( /.png/, '-top.png' )
+    bottom_part_fname = character_filename.sub( /.png/, '-bottom.png' )
 
-      if block != last_block
-        puts "Extracting numbers from block: " + sprintf("0x%06X",block)
-        last_block = block
+    guessed_text_size = 75
+
+    if height < guessed_text_size
+      message = "File too short: #{character_filename}"
+      STDERR.puts message
+      $mutex.synchronize {
+        open('splitting.log','a') { |f| f.puts message }
+      }
+    else
+
+      text_starts_at = height - guessed_text_size
+
+      t = Tempfile.new('unicode-tile')
+      t.puts( "#{top_part_fname} 0 0 #{width} #{text_starts_at}" )
+      t.puts( "#{bottom_part_fname} 0 #{text_starts_at} #{width} #{guessed_text_size}" )
+      t.close()
+
+      if not system("#{$helpers}/crop-images",character_filename,t.path)
+        puts "#{$helpers}/crop-image #{character_filename} #{t.path} failed"
+        exit(-1)
       end
 
-      block_name = name_of_page(fname.gsub(/^.*(U[0-9A-F]+).*$/,'\1'))
-      next unless block_name
+      top_width = nil
+      top_height = nil
 
-      info = `#{helpers}/png-size #{fname}`
-      unless $?.success?
-        puts "png-size #{fname} failed."
-        next
-      end
-
-      width = nil
-      height = nil
-
-      info.chomp!
-      if info =~ /(\d+)x(\d+)/
-
-        width = Integer($1)
-        height = Integer($2)
-
-        top_part_fname = fname.sub( /.png/, '-top.png' )
-        bottom_part_fname = fname.sub( /.png/, '-bottom.png' )
-
-        guessed_text_size = 75
-
-        text_starts_at = height - guessed_text_size
-
-        t = Tempfile.new('unicode-tile')
-        t.puts( "#{top_part_fname} 0 0 #{width} #{text_starts_at}" )
-        t.puts( "#{bottom_part_fname} 0 #{text_starts_at} #{width} #{guessed_text_size}" )
-        t.close()
-
-        if not system("#{helpers}/crop-images",fname,t.path)
-          puts "#{helpers}/crop-image #{fname} #{t} failed"
-          exit(-1)
-        end
-
-        top_width = nil
-        top_height = nil
-
-        output = `#{helpers}/empty-image #{top_part_fname}`
-        if $?.success?
-          puts "Empty, skipping: #{fname}"
-          system("rm",top_part_fname)
-          system("rm",bottom_part_fname)
-          next
-        else
-          output.chomp!
-          if output =~ /^(\d+) (\d+)/
-            top_width = Integer($1)
-            top_height = Integer($2)
-          end
+      output = jruby_safe_backticks("#{$helpers}/empty-image #{top_part_fname}",output_expected=true)
+      output.chomp!
+      if output == "Empty"
+        puts "Empty, skipping: #{character_filename}"
+        system("rm",top_part_fname)
+        system("rm",bottom_part_fname)
+      else
+        output.chomp!
+        if output =~ /^(\d+) (\d+)/
+          top_width = Integer($1)
+          top_height = Integer($2)
         end
 
         # Check that the bottom part isn't hashed out, and delete
         # it if so:
 
-        output = `#{helpers}/bottom-line-proportion #{bottom_part_fname}`
-        proportion = Float(output)
-        if proportion > 0.01
-          puts "Probably cross-hatched, skipping: #{fname}"
+        proportion = nil
+        output = jruby_safe_backticks("#{$helpers}/bottom-line-proportion #{bottom_part_fname}",output_expected=true)
+        begin
+          proportion = Float(output)
+        rescue ArgumentError => e
+          STDERR.puts "Parsing a proportion out of the output '#{output}' from file #{bottom_part_fname} failed"
+        end
+        if proportion and proportion > 0.01
+          puts "Probably cross-hatched, skipping: #{character_filename}"
           system("rm",top_part_fname)
           system("rm",bottom_part_fname)
-          next
+        else
+
+          tileinfo = TileInfo.new(top_width,top_height)
+          tileinfo.filename = top_part_fname
+
+          # Now use OCR to try to parse the codepoint out of the bottom
+          # part:
+
+          result = jruby_safe_backticks("/home/mark/netpbm-10.35.75/converter/other/pngtopnm #{bottom_part_fname} | ocrad -",output_expected=true)
+
+          result.chomp!
+          result.gsub!( /\s/, '' )
+          result.gsub!( /[oO]/, '0' )
+          result.gsub!( /a/, '8' )
+          result.gsub!( /g/, '9' )
+
+          result.upcase!
+
+          tileinfo.ocr_codepoint = "0x" + result
+          return tileinfo
         end
+      end
+    end
+  else
+    STDERR.puts "'#{$helpers}/png-size #{character_filename}' failed"
+  end
+  nil
+end
 
-        if top_width and top_height
-            o_top_sizes.puts("#{top_part_fname}: !ruby/object:TileInfo")
-            o_top_sizes.puts("  filename: #{top_part_fname}")
-            o_top_sizes.puts("  h: #{top_height}")
-            o_top_sizes.puts("  w: #{top_width}")
-            o_top_sizes.puts("  block: #{block_name}")
-        end
+$threads = []
+$running_threads = 0
 
-        # Now use OCR to try to parse the codepoint out of the bottom
-        # part:
+top_sizes = []
+codepoints = []
 
-        result = `/home/mark/netpbm-10.35.75/converter/other/pngtopnm #{bottom_part_fname} | ocrad -`
-        unless $?.success?
-          puts "png-topnm #{bottom_part_fname} | ocrad - failed."
-          exit(-1)
-        end
+class Codepoint
+  attr_accessor :filename, :codepoint
+  def initialize(f,c)
+    @filename = f
+    @codepoint = c
+  end
+end
 
-        result.chomp!
-        result.gsub!( /\s/, '' )
-        result.gsub!( /[oO]/, '0' )
-        result.gsub!( /a/, '8' )
-        result.gsub!( /g/, '9' )
+$max_threads *= 2
 
-        result.upcase!
+done = 0
 
-        o_codepoints.puts "-"
-        o_codepoints.puts '  - "' + fname + '"'
-        o_codepoints.puts "  - " + "0x" + result
+files.each do |fname|
 
+  puts "Considering for OCR #{fname}"
+
+  # break if done > 100
+
+  $mutex.synchronize {
+    $condition.wait($mutex) while $running_threads >= $max_threads
+    $running_threads += 1
+    $condition.signal if $running_threads < $max_threads
+  }
+
+  thread = Thread.new(fname) { |file_to_process|
+
+    Thread.current[:tileinfo] = divide_and_ocr(file_to_process)
+
+    $mutex.synchronize {
+      if Thread.current[:tileinfo]
+        top_sizes <<  Thread.current[:tileinfo]
       end
 
+      $running_threads -= 1
+      $condition.signal if $running_threads < $max_threads
+    }
+  }
+
+  # Go through the list of threads, find any that have finished, join
+  # them, and remove all the finished threads from the array afterwards:
+  $mutex.synchronize {
+    indices_to_remove = []
+    $threads.each_index do |i|
+      if $threads[i]
+        status = $threads[i].status
+        if status == false or status == nil
+          $threads[i].join
+          indices_to_remove << i
+        end
+      end
     end
+    indices_to_remove.reverse.each do |i|
+      $threads.delete_at i
+    end
+    $threads << thread
+  }
 
+  done += 1
+
+end
+
+$threads.each {|t| t.join}
+
+open( "top-sizes.yaml", "w" ) do |o_top_sizes|
+  o_top_sizes.puts "---"
+  top_sizes.each do |t|
+    o_top_sizes.puts(t.to_yaml_hash_element)
   end
+end
 
+open( "codepoints.yaml", "w" ) do |o_codepoints|
+  top_sizes.each do |t|
+    o_codepoints.puts "-"
+    o_codepoints.puts '  - "' + t.filename + '"'
+    o_codepoints.puts "  - " + t.ocr_codepoint
+  end
 end

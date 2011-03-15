@@ -1,7 +1,7 @@
 #!/usr/bin/ruby -w
 
-pngtopnm = "/home/mark/netpbm-10.34/converter/other/pngtopnm"
-pnmtopng = "/home/mark/netpbm-10.34/converter/other/pnmtopng"
+pngtopnm = "/home/mark/netpbm-10.35.75/converter/other/pngtopnm"
+pnmtopng = "/home/mark/netpbm-10.35.75/converter/other/pnmtopng"
 
 page_glob_template = 'poster-inline-breaks-%02d-00*.pnm'
 complete_page_template_pnm = 'poster-complete-%02d.pnm'

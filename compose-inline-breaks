@@ -13,14 +13,28 @@ $number_of_pages = Integer(ARGV[1])
 
 require 'tileinfo.rb'
 
+$info_hash = {}
 $pages_hash = Hash.new
 
-files = Dir['individual-characters/U*-*-*-top.png']
+input = "top-sizes.yaml"
+STDERR.puts "Opening #{input}"
+all_tiles = YAML.load( open( input ) { |f| f.read } )
+all_tiles.each_pair do |filename,t|
+  next unless t.valid_size?
+  next unless t.apparently_successful_ocr?
+  t.set_block_from_ocr_codepoint
+  $info_hash[t.filename] = t
+  block_first = t.block.first
+  unless $pages_hash.has_key? block_first
+    $pages_hash[block_first] = Array.new
+  end
+  $pages_hash[block_first].push t.filename
+end
 
-files.each do |png_file|
+puts "After filtering, had #{$info_hash.length} valid tiles"
 
-  $pages_hash[png_file.gsub(/^.*\/(U.+)\-\d{3}\-\d{8}-top\..*/,'\1')] = Array.new
-
+for p in $pages_hash.keys.sort_by { |n| n.to_i(16) }
+  puts "Block beginning #{p} has #{$pages_hash[p].length} characters"
 end
 
 $font_point_size = 160
@@ -72,7 +86,7 @@ end
 
 def compare_page_names( a, b )
 
-  re = Regexp.new('U(\w+)')
+  re = Regexp.new('U?(\w+)')
 
   a_page = nil
   b_page = nil
@@ -97,17 +111,9 @@ end
 
 $pages = $pages_hash.keys.sort { |a,b| compare_page_names(a,b) }
 
-$pages.each do |p|
-  puts "#{p} (#{name_of_page(p)})"
-end
-
-$info_hash = YAML.load( open( "top-sizes.yaml", "r" ){ |f| f.read } )
-
-$info_hash.each_key do |png_file|
-  # puts "key from $info_hash was: #{png_file}"
-  from_page = png_file.gsub(/^.*(U[0-9A-Fa-f]+)\-\d{3}\-\d{8}-top\.png$/,'\1')
-  $pages_hash[from_page].push(png_file)
-end
+# $pages.each do |p|
+#   puts "#{p} (#{name_of_page(p)})"
+# end
 
 # The layout will look like this:
 #
@@ -156,6 +162,10 @@ $minimum_space_to_right_of_block = 300
 $space_to_right_of_header = 150
 # $space_to_right_of_header = -190
 
+def name_of_page(p)
+  $page_to_block[p].nice_name
+end
+
 def whole_block_width( page_name )
 
   page_files = $pages_hash[page_name]
@@ -179,7 +189,7 @@ end
 
 $pages.each do |p|
 
-  puts sprintf( "%10s: %10d (%70s)", p, whole_block_width(p), name_of_page(p) )
+  puts sprintf( "%10s: %10d (%70s)", p, whole_block_width(p), $page_to_block[p].name )
 
 end
 
@@ -452,7 +462,7 @@ pixel_width_to_use = nil
 if true
 
 x_lower = 500
-x_higher = files.length * $max_tile_height
+x_higher = $info_hash.length * $max_tile_height
 
 y_lower = nil
 y_higher = nil
