@@ -40,17 +40,10 @@ end
 
 puts "paper_height_in_inches_* #{paper_width_in_inches} x #{paper_height_in_inches}"
 
-netpbm_build_tree = "/home/mark/netpbm-10.35.75/"
-
-pnmtops = "#{netpbm_build_tree}converter/other/pnmtops"
-pamscale = "#{netpbm_build_tree}editor/pamscale"
-pnmtopng = "#{netpbm_build_tree}converter/other/pnmtopng"
-pgmtoppm = "#{netpbm_build_tree}converter/other/pgmtoppm"
-
-# pnmtops = "pnmtops"
-# pamscale = "pnmscale"
-# pnmtopng = "pnmtopng"
-# pgmtoppm = "pgmtoppm"
+pnmtops = "pnmtops"
+pamscale = "pnmscale"
+pnmtopng = "pnmtopng"
+pgmtoppm = "pgmtoppm"
 
 # ------------------------------------------------------------------------
 # You probably don't have these:
@@ -141,7 +134,7 @@ pnm_files.each do |pnmfile|
       puts "  #{pngfile_reduce} exists, not regenerating..."
     else  
       puts "  Generating reduce PNG from that."
-      command = "#{pnmtopng} -compression=3 #{pnmfile_reduce} > #{pngfile_reduce}"
+      command = "#{pnmtopng} -compression 3 #{pnmfile_reduce} > #{pngfile_reduce}"
       puts "    Running: #{command}"
       system command
     end
