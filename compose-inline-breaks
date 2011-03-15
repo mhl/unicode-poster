@@ -24,7 +24,8 @@ files.each do |png_file|
 end
 
 $font_point_size = 160
-$font_filename = '/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf'
+$font_filename = '/usr/share/fonts/truetype/ttf-dejavu/DejaVuSans.ttf'
+# $font_filename = '/usr/share/fonts/truetype/ttf-bitstream-vera/Vera.ttf'
 
 def text_rectangle( text, point_size = $font_point_size )
   
