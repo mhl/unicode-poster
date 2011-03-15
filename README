@@ -8,33 +8,19 @@ These scripts require the following binaries:
    ocrad    (package ocrad)
    convert  (package imagemagick)
 
-... and you will need the following libraries installed:
+... and many from the netpbm package.  You will also need to have the
+following libraries installed:
 
    libpng12-dev
    libgd-ruby1.8
 
-Make sure that you have the font DejaVu installed as well:
-  ttf-dejavu-core
+... and the font DejaVu installed as well:
+
+   ttf-dejavu-core
 
 You can install all of these dependencies with:
 
-  apt-get install jruby ruby1.8 ruby curl poppler-utils make ocrad imagemagick libpng12-dev libgd-ruby1.8 ttf-dejavu-core
-
-For composing the poster strips you will need the upstream
-version of netpbm of at least version 10.34, which you can get
-from:
-
-  http://netpbm.sourceforge.net/
-
-The Debian packaged version of netpbm is very different from the
-upstream, and unfortunately I've only got these scripts to work
-properly with the latter.  (The reasons for the Debian fork are
-good ones: the license situation of the upstream netpbm tools is
-very confused and there was concern over buffer overflows.  As a
-result, I'd recommend that you use only use the upstream version
-for this application and submit bugs or patches to the Debian
-BTS to help improve the Debian-packaged version.)  See steps 4
-and 5 for details of how to get the upstream netpbm.
+  apt-get install jruby ruby1.8 ruby curl poppler-utils make ocrad imagemagick libpng12-dev libgd-ruby1.8 ttf-dejavu-core netpbm
 
 A completed build tree for this poster is about 18 GiB for me so
 you need lots of disk space.
@@ -102,18 +88,6 @@ manager will crash if you open this directory.
 Step 3: Composing the Poster Strips
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Composing these strips into the final poster images is quite
-tricky since many programs won't cope elegantly with such large
-images.  netpbm (in the non-Debian version) works fine for this,
-however.  You'll need to compile this yourself, so download
-netpbm 10.34 and build it.  Then edit the paths that contain
-"/home/mark" in the scripts:
-
-       generate-output-multi-page
- and   compose-pnm-files-multi-page
-
-... to get to the versions you've just built.
-
 Now, to compose the strips into a single file, just run:
 
   ./compose-pnm-files-multi-page
@@ -149,9 +123,7 @@ Step 4: Generating Printable Output
   customize it quite a bit anyway, depending on what your
   printing situation is - see Step 5.]
 
-Make sure that you've edited generate-output-multi-page to correct the
-paths to netpbm tools, and then as a test you can try generating some
-600dpi A4 versions:
+First, as a test, you can try generating some 600dpi A4 versions:
 
   ./generate-output-multi-page A4 600
 

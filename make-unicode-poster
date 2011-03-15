@@ -329,7 +329,7 @@ def divide_and_ocr(character_filename)
           # Now use OCR to try to parse the codepoint out of the bottom
           # part:
 
-          result = jruby_safe_backticks("/home/mark/netpbm-10.35.75/converter/other/pngtopnm #{bottom_part_fname} | ocrad -",output_expected=true)
+          result = jruby_safe_backticks("pngtopnm #{bottom_part_fname} | ocrad -",output_expected=true)
 
           result.chomp!
           result.gsub!( /\s/, '' )
