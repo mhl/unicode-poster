@@ -1,4 +1,4 @@
-#!/usr/bin/jruby -J-Xmx1536M
+#!/usr/bin/env jruby -w
 
 require 'tileinfo.rb'
 require 'thread'
