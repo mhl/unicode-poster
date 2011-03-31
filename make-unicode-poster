@@ -1,4 +1,4 @@
-#!/usr/bin/env jruby -w
+#!/usr/bin/env jruby
 
 require 'tileinfo.rb'
 require 'thread'
