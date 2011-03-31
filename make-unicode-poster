@@ -38,7 +38,7 @@ unless system("cd #{$helpers} && make")
 end
 
 pdf_name = 'CodeCharts.pdf'
-pdf_url = "http://www.unicode.org/Public/5.1.0/charts/CodeCharts.pdf"
+pdf_url = "http://www.unicode.org/Public/6.0.0/charts/CodeCharts.pdf"
 
 last_png_file = 'U-849.png'
 
